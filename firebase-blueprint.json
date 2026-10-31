@@ -1,0 +1,160 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public author and reader profile without PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 50, "pattern": "^[a-zA-Z0-9_\\-.]+$" },
+        "bio": { "type": "string", "maxLength": 500 },
+        "photoUrl": { "type": "string", "maxLength": 200000 },
+        "isVerified": { "type": "boolean" },
+        "role": { "type": "string", "enum": ["reader", "author", "admin"] },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "followersCount": { "type": "integer" },
+        "followingCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "username", "bio", "photoUrl", "isVerified", "role", "visibility", "followersCount", "followingCount", "createdAt", "updatedAt"]
+    },
+    "LiteraryPost": {
+      "title": "LiteraryPost",
+      "description": "Submitted or published literary work in Arabic, Malayalam, or English.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "authorUsername": { "type": "string", "minLength": 1, "maxLength": 50 },
+        "authorPhoto": { "type": "string", "maxLength": 200000 },
+        "authorVerified": { "type": "boolean" },
+        "language": { "type": "string", "enum": ["en", "ar", "ml"] },
+        "section": { "type": "string", "enum": ["fiction", "poetry", "non-fiction"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 300 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 50000 },
+        "coverUrl": { "type": "string", "maxLength": 300000 },
+        "aiScore": { "type": "integer" },
+        "aiVerdict": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["pending", "published", "rejected"] },
+        "viewsCount": { "type": "integer" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "authorUsername", "authorPhoto", "authorVerified", "language", "section", "title", "subtitle", "content", "coverUrl", "aiScore", "aiVerdict", "status", "viewsCount", "likesCount", "commentsCount", "createdAt", "updatedAt"]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Reader comment on a literary work.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "authorPhoto": { "type": "string", "maxLength": 200000 },
+        "authorVerified": { "type": "boolean" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "authorId", "authorName", "authorPhoto", "authorVerified", "text", "visibility", "createdAt"]
+    },
+    "StoryItem": {
+      "title": "StoryItem",
+      "description": "Instagram/WhatsApp style story shared from a literary post for the homepage.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "postTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "postSection": { "type": "string", "enum": ["fiction", "poetry", "non-fiction"] },
+        "postLanguage": { "type": "string", "enum": ["en", "ar", "ml"] },
+        "excerpt": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "coverUrl": { "type": "string", "maxLength": 300000 },
+        "authorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "authorPhoto": { "type": "string", "maxLength": 200000 },
+        "authorVerified": { "type": "boolean" },
+        "durationSeconds": { "type": "integer" },
+        "visibility": { "type": "string", "enum": ["public"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "postTitle", "postSection", "postLanguage", "excerpt", "coverUrl", "authorId", "authorName", "authorPhoto", "authorVerified", "durationSeconds", "visibility", "createdAt"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "Instagram-style direct message between two users.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "senderPhoto": { "type": "string", "maxLength": 200000 },
+        "receiverId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "receiverName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "receiverPhoto": { "type": "string", "maxLength": 200000 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "senderPhoto", "receiverId", "receiverName", "receiverPhoto", "text", "createdAt"]
+    },
+    "FollowRelation": {
+      "title": "FollowRelation",
+      "description": "Follow relationship between a follower and an author.",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "followingId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerId", "followingId", "createdAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Notification for newly published submissions, blue tick awards, and admin alerts.",
+      "type": "object",
+      "properties": {
+        "targetUserId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "type": { "type": "string", "enum": ["published", "submission", "verified", "new_account"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "postId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetUserId", "actorId", "actorName", "type", "title", "postId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public author and reader profiles"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/LiteraryPost" },
+      "description": "Literary submissions and published works"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/PostComment" },
+      "description": "Comments on published literary works"
+    },
+    "/stories/{storyId}": {
+      "schema": { "$ref": "#/entities/StoryItem" },
+      "description": "Homepage stories created from literary posts"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectMessage" },
+      "description": "Direct messages between users"
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/FollowRelation" },
+      "description": "Follower-to-author social graph records"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "Publication and account notifications"
+    }
+  }
+}

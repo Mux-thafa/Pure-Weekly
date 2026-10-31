@@ -1,0 +1,6 @@
+{
+  "name": "Safwa Publishers",
+  "description": "Multilingual literary publishing house and social reading platform featuring Arabic, Malayalam, and English fiction, poetry, and non-fiction with stories, AI manuscript verification, and author messaging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

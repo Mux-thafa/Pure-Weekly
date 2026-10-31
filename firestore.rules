@@ -1,0 +1,292 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'mohammedmusthafac3@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // Validation Blueprints
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'name', 'username', 'bio', 'photoUrl', 'isVerified', 'role', 'visibility', 'followersCount', 'followingCount', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'username', 'bio', 'photoUrl', 'isVerified', 'role', 'visibility', 'followersCount', 'followingCount', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 50 && data.username.matches('^[a-zA-Z0-9_\\-.]+$')
+        && data.bio is string && data.bio.size() <= 500
+        && data.photoUrl is string && data.photoUrl.size() <= 200000
+        && data.isVerified is bool
+        && data.role is string && data.role.size() <= 20 && (data.role == 'reader' || data.role == 'author' || data.role == 'admin')
+        && data.visibility is string && data.visibility.size() <= 20 && data.visibility == 'public'
+        && data.followersCount is int && data.followersCount >= 0
+        && data.followingCount is int && data.followingCount >= 0
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidLiteraryPost(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'authorUsername', 'authorPhoto', 'authorVerified', 'language', 'section', 'title', 'subtitle', 'content', 'coverUrl', 'aiScore', 'aiVerdict', 'status', 'viewsCount', 'likesCount', 'commentsCount', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['authorId', 'authorName', 'authorUsername', 'authorPhoto', 'authorVerified', 'language', 'section', 'title', 'subtitle', 'content', 'coverUrl', 'aiScore', 'aiVerdict', 'status', 'viewsCount', 'likesCount', 'commentsCount', 'createdAt', 'updatedAt'])
+        && data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100
+        && data.authorUsername is string && data.authorUsername.size() >= 1 && data.authorUsername.size() <= 50
+        && data.authorPhoto is string && data.authorPhoto.size() <= 200000
+        && data.authorVerified is bool
+        && data.language is string && data.language.size() == 2 && (data.language == 'en' || data.language == 'ar' || data.language == 'ml')
+        && data.section is string && data.section.size() <= 20 && (data.section == 'fiction' || data.section == 'poetry' || data.section == 'non-fiction')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.subtitle is string && data.subtitle.size() <= 300
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 50000
+        && data.coverUrl is string && data.coverUrl.size() <= 300000
+        && data.aiScore is int && data.aiScore >= 0 && data.aiScore <= 100
+        && data.aiVerdict is string && data.aiVerdict.size() <= 500
+        && data.status is string && data.status.size() <= 20 && (data.status == 'pending' || data.status == 'published' || data.status == 'rejected')
+        && data.viewsCount is int && data.viewsCount >= 0
+        && data.likesCount is int && data.likesCount >= 0
+        && data.commentsCount is int && data.commentsCount >= 0
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidPostComment(data) {
+      return data.keys().hasAll(['postId', 'authorId', 'authorName', 'authorPhoto', 'authorVerified', 'text', 'visibility', 'createdAt'])
+        && data.keys().hasOnly(['postId', 'authorId', 'authorName', 'authorPhoto', 'authorVerified', 'text', 'visibility', 'createdAt'])
+        && data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 128 && data.postId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100
+        && data.authorPhoto is string && data.authorPhoto.size() <= 200000
+        && data.authorVerified is bool
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 2000
+        && data.visibility is string && data.visibility.size() <= 20 && data.visibility == 'public'
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidStoryItem(data) {
+      return data.keys().hasAll(['postId', 'postTitle', 'postSection', 'postLanguage', 'excerpt', 'coverUrl', 'authorId', 'authorName', 'authorPhoto', 'authorVerified', 'durationSeconds', 'visibility', 'createdAt'])
+        && data.keys().hasOnly(['postId', 'postTitle', 'postSection', 'postLanguage', 'excerpt', 'coverUrl', 'authorId', 'authorName', 'authorPhoto', 'authorVerified', 'durationSeconds', 'visibility', 'createdAt'])
+        && data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 128 && data.postId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.postTitle is string && data.postTitle.size() >= 1 && data.postTitle.size() <= 200
+        && data.postSection is string && data.postSection.size() <= 20 && (data.postSection == 'fiction' || data.postSection == 'poetry' || data.postSection == 'non-fiction')
+        && data.postLanguage is string && data.postLanguage.size() == 2 && (data.postLanguage == 'en' || data.postLanguage == 'ar' || data.postLanguage == 'ml')
+        && data.excerpt is string && data.excerpt.size() >= 1 && data.excerpt.size() <= 600
+        && data.coverUrl is string && data.coverUrl.size() <= 300000
+        && data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100
+        && data.authorPhoto is string && data.authorPhoto.size() <= 200000
+        && data.authorVerified is bool
+        && data.durationSeconds is int && data.durationSeconds >= 5 && data.durationSeconds <= 86400
+        && data.visibility is string && data.visibility.size() <= 20 && data.visibility == 'public'
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidDirectMessage(data) {
+      return data.keys().hasAll(['senderId', 'senderName', 'senderPhoto', 'receiverId', 'receiverName', 'receiverPhoto', 'text', 'createdAt'])
+        && data.keys().hasOnly(['senderId', 'senderName', 'senderPhoto', 'receiverId', 'receiverName', 'receiverPhoto', 'text', 'createdAt'])
+        && data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 && data.senderId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 100
+        && data.senderPhoto is string && data.senderPhoto.size() <= 200000
+        && data.receiverId is string && data.receiverId.size() >= 1 && data.receiverId.size() <= 128 && data.receiverId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.receiverName is string && data.receiverName.size() >= 1 && data.receiverName.size() <= 100
+        && data.receiverPhoto is string && data.receiverPhoto.size() <= 200000
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 2000
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidFollowRelation(data) {
+      return data.keys().hasAll(['followerId', 'followingId', 'createdAt'])
+        && data.keys().hasOnly(['followerId', 'followingId', 'createdAt'])
+        && data.followerId is string && data.followerId.size() >= 1 && data.followerId.size() <= 128 && data.followerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.followingId is string && data.followingId.size() >= 1 && data.followingId.size() <= 128 && data.followingId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.followerId != data.followingId
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidNotificationItem(data) {
+      return data.keys().hasAll(['targetUserId', 'actorId', 'actorName', 'type', 'title', 'postId', 'createdAt'])
+        && data.keys().hasOnly(['targetUserId', 'actorId', 'actorName', 'type', 'title', 'postId', 'createdAt'])
+        && data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128 && data.targetUserId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.actorId is string && data.actorId.size() >= 1 && data.actorId.size() <= 128 && data.actorId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100
+        && data.type is string && data.type.size() <= 20 && (data.type == 'published' || data.type == 'submission' || data.type == 'verified' || data.type == 'new_account')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.postId is string && data.postId.size() <= 128
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    // Admins Registry
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    // Connection Health Probe
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, create, update, delete: if false;
+    }
+
+    // Public User Profiles (Zero PII stored here)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (resource == null || existing().visibility == 'public' || (isSignedIn() && request.auth.uid == userId));
+      allow list: if existing().visibility == 'public';
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().uid == userId
+        && (
+          isAdmin() || (incoming().isVerified == false && (incoming().role == 'author' || incoming().role == 'reader'))
+        );
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin()
+          || (
+            request.auth.uid == userId
+            && incoming().isVerified == existing().isVerified
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'username', 'bio', 'photoUrl', 'updatedAt'])
+          )
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['followersCount', 'followingCount', 'updatedAt'])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // Literary Posts
+    match /posts/{postId} {
+      allow get: if isValidId(postId) && (existing().status == 'published' || (isSignedIn() && (existing().authorId == request.auth.uid || isAdmin())));
+      allow list: if existing().status == 'published' || (isSignedIn() && (existing().authorId == request.auth.uid || isBootstrappedAdmin()));
+      allow create: if isVerifiedUser()
+        && isValidId(postId)
+        && isValidLiteraryPost(incoming())
+        && incoming().authorId == request.auth.uid
+        && (isAdmin() || incoming().status == 'pending')
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if isValidId(postId)
+        && isValidLiteraryPost(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin()
+          || (
+            isVerifiedUser()
+            && request.auth.uid == existing().authorId
+            && existing().status == 'pending'
+            && incoming().status == 'pending'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subtitle', 'content', 'coverUrl', 'updatedAt'])
+          )
+          || (
+            existing().status == 'published'
+            && incoming().status == 'published'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['viewsCount', 'likesCount', 'commentsCount', 'updatedAt'])
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(postId) && (existing().authorId == request.auth.uid || isAdmin());
+
+      // Post Comments Subcollection
+      match /comments/{commentId} {
+        allow get: if isValidId(postId) && isValidId(commentId) && existing().visibility == 'public';
+        allow list: if existing().visibility == 'public';
+        allow create: if isVerifiedUser()
+          && isValidId(postId)
+          && isValidId(commentId)
+          && isValidPostComment(incoming())
+          && incoming().postId == postId
+          && incoming().authorId == request.auth.uid
+          && get(/databases/$(database)/documents/posts/$(postId)).data.status == 'published';
+        allow update: if false;
+        allow delete: if isVerifiedUser()
+          && isValidId(postId)
+          && isValidId(commentId)
+          && (existing().authorId == request.auth.uid || isAdmin())
+          && exists(/databases/$(database)/documents/posts/$(postId));
+      }
+    }
+
+    // Homepage Stories (Only from published posts)
+    match /stories/{storyId} {
+      allow get: if isValidId(storyId) && existing().visibility == 'public';
+      allow list: if existing().visibility == 'public';
+      allow create: if isVerifiedUser()
+        && isValidId(storyId)
+        && isValidStoryItem(incoming())
+        && incoming().authorId == request.auth.uid
+        && get(/databases/$(database)/documents/posts/$(incoming().postId)).data.status == 'published';
+      allow update: if false;
+      allow delete: if isVerifiedUser()
+        && isValidId(storyId)
+        && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // Direct Messages
+    match /messages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
+      allow list: if isSignedIn() && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
+      allow create: if isVerifiedUser()
+        && isValidId(messageId)
+        && isValidDirectMessage(incoming())
+        && incoming().senderId == request.auth.uid
+        && exists(/databases/$(database)/documents/users/$(incoming().receiverId));
+      allow update, delete: if false;
+    }
+
+    // Follows
+    match /follows/{followId} {
+      allow get: if isSignedIn() && isValidId(followId) && (resource == null || existing().followerId == request.auth.uid || existing().followingId == request.auth.uid);
+      allow list: if isSignedIn() && (existing().followerId == request.auth.uid || existing().followingId == request.auth.uid);
+      allow create: if isVerifiedUser()
+        && isValidId(followId)
+        && isValidFollowRelation(incoming())
+        && incoming().followerId == request.auth.uid
+        && exists(/databases/$(database)/documents/users/$(incoming().followingId));
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(followId) && existing().followerId == request.auth.uid;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (existing().targetUserId == request.auth.uid || existing().targetUserId == 'all' || isAdmin());
+      allow list: if isSignedIn() && (existing().targetUserId == request.auth.uid || existing().targetUserId == 'all' || isBootstrappedAdmin());
+      allow create: if isVerifiedUser()
+        && isValidId(notificationId)
+        && isValidNotificationItem(incoming())
+        && incoming().actorId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(notificationId) && (existing().targetUserId == request.auth.uid || isAdmin());
+    }
+  }
+}
