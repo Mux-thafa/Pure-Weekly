@@ -62,9 +62,11 @@ const RUNTIME_SESSION_SECRET =
 const DB_DIR = path.resolve(process.cwd(), '.data');
 const DB_FILE = path.join(DB_DIR, 'safwa_db.json');
 
+const SCRYPT_OPTIONS = { N: 16384, r: 8, p: 1, maxmem: 32 * 1024 * 1024 };
+
 export function hashPasswordWithSalt(password: string, salt?: string): { salt: string; hash: string } {
   const actualSalt = salt || crypto.randomBytes(16).toString('hex');
-  const derivedKey = crypto.scryptSync(password, actualSalt, 64);
+  const derivedKey = crypto.scryptSync(password, actualSalt, 64, SCRYPT_OPTIONS);
   return {
     salt: actualSalt,
     hash: derivedKey.toString('hex')
@@ -74,7 +76,7 @@ export function hashPasswordWithSalt(password: string, salt?: string): { salt: s
 export function verifyPasswordHash(password: string, salt: string, expectedHash: string): boolean {
   if (!password || !salt || !expectedHash) return false;
   try {
-    const derivedKey = crypto.scryptSync(password, salt, 64);
+    const derivedKey = crypto.scryptSync(password, salt, 64, SCRYPT_OPTIONS);
     const expectedBuffer = Buffer.from(expectedHash, 'hex');
     if (derivedKey.length !== expectedBuffer.length) return false;
     return crypto.timingSafeEqual(derivedKey, expectedBuffer);

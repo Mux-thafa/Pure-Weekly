@@ -214,8 +214,13 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
   // Admin Overview Statistics
   const adminStats = calculateAdminOverviewStats(users, posts);
 
-  const isOfficialChiefEditor =
-    authEmail === CHIEF_EDITOR_EMAIL || isAdminRole(currentUser.role);
+  // Strict check: Admin dashboard & console only accessible by mohammedmusthafac3@gmail.com
+  const isOfficialChiefEditor = Boolean(
+    isAuthenticated &&
+    ((authEmail || '').trim().toLowerCase() === CHIEF_EDITOR_EMAIL.toLowerCase() ||
+     (currentUser.email || '').trim().toLowerCase() === CHIEF_EDITOR_EMAIL.toLowerCase()) &&
+    isAdminRole(currentUser.role)
+  );
 
   const pendingReviewWorks = posts.filter(
     (p) =>
@@ -339,11 +344,11 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-      {/* Role-Adaptive Navigation Bar (User Navigation & Admin Console Navigation) */}
-      <div className="p-4 rounded-2xl bg-[#F3EFE6] border border-stone-300 space-y-3">
+      {/* Role-Adaptive Navigation Bar with Colourful Glowing Accents */}
+      <div className="p-4 rounded-2xl bg-[#0D1426]/90 border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)] space-y-3 backdrop-blur-xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-widest text-stone-500 font-semibold px-2">
+            <span className="text-[11px] uppercase tracking-widest text-cyan-400 font-bold px-2 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
               Member Desk:
             </span>
             {(
@@ -360,10 +365,10 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     currentTab === item.id
-                      ? 'bg-stone-900 text-white'
-                      : 'text-stone-700 hover:bg-stone-200/70'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.5)] border border-cyan-400/40'
+                      : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -374,22 +379,11 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {!isOfficialChiefEditor && (
-              <button
-                type="button"
-                onClick={() => onOpenAuthModal('admin')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-lg hover:bg-amber-200 transition-colors whitespace-nowrap"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin Login</span>
-              </button>
-            )}
-
             {isAuthenticated ? (
               <button
                 type="button"
                 onClick={onLogout}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-900 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-300 bg-rose-950/40 border border-rose-500/40 rounded-xl hover:bg-rose-900/50 hover:shadow-[0_0_15px_rgba(244,63,94,0.4)] transition-all whitespace-nowrap"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Logout</span>
@@ -399,14 +393,14 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onOpenAuthModal('login')}
-                  className="px-3 py-1.5 text-xs font-semibold text-stone-900 bg-white border border-stone-300 rounded-lg hover:bg-stone-100"
+                  className="px-3 py-1.5 text-xs font-bold text-cyan-200 bg-[#121A30] border border-cyan-500/40 rounded-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.4)]"
                 >
                   Login
                 </button>
                 <button
                   type="button"
                   onClick={() => onOpenAuthModal('register')}
-                  className="px-3 py-1.5 text-xs font-semibold text-white bg-stone-900 rounded-lg hover:bg-stone-800"
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-fuchsia-600 to-pink-600 rounded-xl hover:shadow-[0_0_20px_rgba(217,70,239,0.5)]"
                 >
                   Register
                 </button>
@@ -415,11 +409,11 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
           </div>
         </div>
 
-        {/* Administrator Navigation Strip (Protected by ADMIN Role) */}
+        {/* Administrator Navigation Strip (Strictly rendered ONLY for mohammedmusthafac3@gmail.com) */}
         {isOfficialChiefEditor && (
-          <div className="pt-3 border-t border-stone-300/80 flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-widest text-amber-900 font-bold px-2">
-              <ShieldCheck className="w-3.5 h-3.5" />
+          <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-amber-300 font-bold px-2 drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
               <span>Admin Console:</span>
             </span>
             {(
@@ -436,10 +430,10 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
                 key={adm.id}
                 type="button"
                 onClick={() => setTab(adm.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                   currentTab === adm.id
-                    ? 'bg-amber-800 text-white'
-                    : 'text-stone-800 hover:bg-stone-200/70'
+                    ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.5)] border border-amber-300/40'
+                    : 'text-amber-200/80 hover:text-amber-100 hover:bg-amber-950/40'
                 }`}
               >
                 {adm.label}
@@ -453,58 +447,64 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
       {(currentTab === 'my-profile' || currentTab === 'my-submissions') && (
         <section
           aria-label="User Account Details"
-          className="p-6 md:p-8 rounded-2xl bg-[#F3EFE6] border border-stone-300 flex flex-col gap-6"
+          className="p-6 md:p-8 rounded-3xl bg-[#0D1426]/90 border border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)] backdrop-blur-xl flex flex-col gap-6 text-slate-100"
         >
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              <img
-                src={currentUser.photoUrl}
-                alt={currentUser.name}
-                referrerPolicy="no-referrer"
-                className="w-20 h-20 rounded-full object-cover border-2 border-amber-800/50 shrink-0"
-              />
+              <div className="relative">
+                <img
+                  src={currentUser.photoUrl}
+                  alt={currentUser.name}
+                  referrerPolicy="no-referrer"
+                  className="w-20 h-20 rounded-full object-cover border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.5)] shrink-0"
+                />
+                {currentUser.isVerified && (
+                  <span className="absolute -bottom-1 -right-1 bg-[#090E1D] rounded-full p-0.5">
+                    <BlueTickBadge size={20} />
+                  </span>
+                )}
+              </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl md:text-3xl font-display font-bold text-stone-900">
+                  <h1 className="text-2xl md:text-3xl font-display font-extrabold bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(217,70,239,0.4)]">
                     {currentUser.name}
                   </h1>
-                  {currentUser.isVerified && <BlueTickBadge size={20} />}
-                  <span className="text-xs text-stone-600 font-mono-num">
+                  <span className="text-xs text-slate-400 font-mono-num">
                     @{currentUser.username}
                   </span>
                 </div>
 
-                <p className="text-sm text-stone-700 mt-1.5 max-w-2xl">
+                <p className="text-sm text-slate-300 mt-1.5 max-w-2xl">
                   {currentUser.bio || 'No literary bio added yet.'}
                 </p>
 
-                <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 mt-3">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 mt-3">
                   <span>
                     Role:{' '}
-                    <strong className="text-stone-900 uppercase">
-                      {isOfficialChiefEditor ? 'ADMIN' : 'USER'}
+                    <strong className={`uppercase ${isOfficialChiefEditor ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'text-cyan-300'}`}>
+                      {isOfficialChiefEditor ? 'ADMIN (Chief Editor)' : 'USER'}
                     </strong>
                   </span>
-                  <span aria-hidden="true">·</span>
+                  <span aria-hidden="true" className="text-slate-600">·</span>
                   <span>
                     Blue Tick Status:{' '}
-                    <strong className="text-stone-900">
+                    <strong className="text-slate-200">
                       {currentUser.isVerified
                         ? 'Verified Official Blue Tick'
-                        : 'Standard Account (Awaiting Official Blue Tick)'}
+                        : 'Standard Account (Awaiting Verification)'}
                     </strong>
                   </span>
-                  <span aria-hidden="true">·</span>
+                  <span aria-hidden="true" className="text-slate-600">·</span>
                   <span>
                     Preferred Language:{' '}
-                    <strong className="text-stone-900">
+                    <strong className="text-slate-200">
                       {formatLanguageLabel(currentUser.preferredLanguage || 'en')}
                     </strong>
                   </span>
                   {(authEmail || currentUser.email) && (
                     <>
-                      <span aria-hidden="true">·</span>
-                      <span>{authEmail || currentUser.email}</span>
+                      <span aria-hidden="true" className="text-slate-600">·</span>
+                      <span className="text-cyan-400 font-mono">{authEmail || currentUser.email}</span>
                     </>
                   )}
                 </div>
@@ -515,9 +515,9 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
               <button
                 type="button"
                 onClick={onOpenEditProfile}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-stone-900 bg-[#FBF9F5] border border-stone-300 rounded-xl hover:bg-stone-200/70 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-200 bg-[#131B33] border border-cyan-500/30 rounded-xl hover:bg-[#1A2547] hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(6,182,212,0.35)] transition-all whitespace-nowrap"
               >
-                <Edit3 className="w-3.5 h-3.5" />
+                <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Edit Profile & Photo</span>
               </button>
 
@@ -525,7 +525,7 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
                 <button
                   type="button"
                   onClick={onGoogleSignIn}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-stone-900 rounded-xl hover:bg-stone-800 transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all whitespace-nowrap"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Sign In with Google</span>
@@ -534,66 +534,66 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
             </div>
           </div>
 
-          {/* Small Statistics Widget for Author's Published Works */}
+          {/* Small Statistics Widget for Author's Published Works with Neon Glow */}
           <div
             data-testid="author-statistics-widget"
             aria-label="Author Profile Statistics"
-            className="w-full grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-stone-300/80"
+            className="w-full grid grid-cols-2 sm:grid-cols-4 gap-3 pt-6 border-t border-slate-800"
           >
-            <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200/90 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-stone-600 font-medium">
-                <Eye className="w-3.5 h-3.5 text-amber-800" />
+            <div className="p-4 rounded-2xl bg-[#090E1D] border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)] flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-bold uppercase tracking-wider">
+                <Eye className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Total Reads</span>
               </div>
               <div
                 data-testid="stat-total-reads"
-                className="text-2xl font-mono-num font-bold text-stone-900 mt-2"
+                className="text-3xl font-mono-num font-black text-cyan-300 text-glow-cyan mt-2"
               >
                 {authorStats.totalReads}
               </div>
-              <span className="text-[11px] text-stone-500 mt-0.5">Across published works</span>
+              <span className="text-[11px] text-slate-400 mt-0.5">Across published works</span>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200/90 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-stone-600 font-medium">
-                <Heart className="w-3.5 h-3.5 text-rose-800" />
+            <div className="p-4 rounded-2xl bg-[#090E1D] border border-fuchsia-500/30 shadow-[0_0_20px_rgba(217,70,239,0.2)] flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-fuchsia-300 font-bold uppercase tracking-wider">
+                <Heart className="w-3.5 h-3.5 text-fuchsia-400" />
                 <span>Total Likes</span>
               </div>
               <div
                 data-testid="stat-total-likes"
-                className="text-2xl font-mono-num font-bold text-stone-900 mt-2"
+                className="text-3xl font-mono-num font-black text-fuchsia-300 text-glow-fuchsia mt-2"
               >
                 {authorStats.totalLikes}
               </div>
-              <span className="text-[11px] text-stone-500 mt-0.5">Reader appreciations</span>
+              <span className="text-[11px] text-slate-400 mt-0.5">Reader appreciations</span>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200/90 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-stone-600 font-medium">
-                <Users className="w-3.5 h-3.5 text-sky-800" />
+            <div className="p-4 rounded-2xl bg-[#090E1D] border border-purple-500/30 shadow-[0_0_20px_rgba(168,85,247,0.2)] flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-purple-300 font-bold uppercase tracking-wider">
+                <Users className="w-3.5 h-3.5 text-purple-400" />
                 <span>Followers</span>
               </div>
               <div
                 data-testid="stat-total-followers"
-                className="text-2xl font-mono-num font-bold text-stone-900 mt-2"
+                className="text-3xl font-mono-num font-black text-purple-300 mt-2"
               >
                 {authorStats.totalFollowers}
               </div>
-              <span className="text-[11px] text-stone-500 mt-0.5">Author community</span>
+              <span className="text-[11px] text-slate-400 mt-0.5">Author community</span>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200/90 flex flex-col justify-between">
-              <div className="flex items-center gap-1.5 text-xs text-stone-600 font-medium">
-                <BookOpen className="w-3.5 h-3.5 text-emerald-800" />
+            <div className="p-4 rounded-2xl bg-[#090E1D] border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.2)] flex flex-col justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-emerald-300 font-bold uppercase tracking-wider">
+                <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Published Works</span>
               </div>
               <div
                 data-testid="stat-published-count"
-                className="text-2xl font-mono-num font-bold text-stone-900 mt-2"
+                className="text-3xl font-mono-num font-black text-emerald-300 text-glow-emerald mt-2"
               >
                 {authorStats.publishedWorksCount}
               </div>
-              <span className="text-[11px] text-stone-500 mt-0.5">Live in catalog</span>
+              <span className="text-[11px] text-slate-400 mt-0.5">Live in catalog</span>
             </div>
           </div>
         </section>
@@ -602,12 +602,12 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
       {/* Section 2: User's Submitted Works & Drafts Portfolio */}
       {(currentTab === 'my-profile' || currentTab === 'my-submissions') && (
         <section aria-label="My Submitted Literary Works">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-3 border-b border-stone-200">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-3 border-b border-slate-800">
             <div>
-              <h2 className="text-2xl font-display font-bold text-stone-900">
+              <h2 className="text-2xl font-display font-bold text-white">
                 Submitted Works, Drafts & Publication Status
               </h2>
-              <p className="text-xs text-stone-600 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5">
                 Track all manuscripts submitted or saved as drafts under your account (Draft,
                 Pending, Under Review, Accepted, Revision Requested, Rejected, Published).
               </p>
@@ -615,21 +615,21 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
             <button
               type="button"
               onClick={onNavigateSubmit}
-              className="px-4 py-2 text-xs font-semibold text-white bg-amber-800 rounded-lg hover:bg-amber-900 transition-colors whitespace-nowrap"
+              className="px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-fuchsia-600 to-pink-600 rounded-xl hover:shadow-[0_0_20px_rgba(217,70,239,0.5)] transition-all whitespace-nowrap"
             >
               Submit New Work
             </button>
           </div>
 
           {mySubmittedWorks.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-white border border-stone-200 text-center">
-              <p className="text-base font-display text-stone-700">
+            <div className="p-8 rounded-3xl bg-[#0D1426]/70 border border-slate-800 text-center text-slate-300">
+              <p className="text-base font-display">
                 You have not submitted any works under this profile yet.
               </p>
               <button
                 type="button"
                 onClick={onNavigateSubmit}
-                className="mt-3 px-4 py-2 text-xs font-semibold text-stone-900 bg-[#F3EFE6] border border-stone-300 rounded-lg hover:bg-stone-200 transition-colors"
+                className="mt-3 px-4 py-2 text-xs font-bold text-cyan-300 bg-[#121A30] border border-cyan-500/40 rounded-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all"
               >
                 Go to Submission Desk
               </button>
@@ -968,18 +968,18 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
       {isOfficialChiefEditor && (
         <section
           aria-label="Official Safwa Publishers Chief Editor Console"
-          className="p-6 md:p-8 rounded-2xl bg-white border border-stone-300 space-y-8"
+          className="p-6 md:p-8 rounded-3xl bg-[#0D1426] border border-cyan-500/30 shadow-[0_0_35px_rgba(6,182,212,0.15)] space-y-8"
         >
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 pb-5">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
             <div>
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-amber-800" />
-                <h2 className="text-2xl font-display font-bold text-stone-900">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+                <h2 className="text-2xl font-display font-extrabold text-white">
                   Official Safwa Publishers — Administrator & Chief Editor Console
                 </h2>
                 <BlueTickBadge size={18} />
               </div>
-              <p className="text-xs text-stone-600 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Role-verified ADMIN workspace: overview statistics, user account management,
                 manuscript review workflow, publications, categories, and notifications.
               </p>
@@ -989,68 +989,69 @@ export const DashboardAndAdminView: React.FC<DashboardAndAdminViewProps> = ({
           {/* ADMIN OVERVIEW KPI GRID (Always shown on Admin Dashboard or My Profile for Admin) */}
           {(currentTab === 'admin-overview' || currentTab === 'my-profile') && (
             <div className="space-y-6">
-              <h3 className="text-lg font-display font-semibold text-stone-900">
-                01. Platform Statistics Overview
+              <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                <span className="text-cyan-400 font-mono">01.</span>
+                <span>Platform Statistics Overview</span>
               </h3>
 
               <div
                 data-testid="admin-overview-stats"
                 className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
               >
-                <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200">
-                  <span className="text-xs text-stone-600">Registered Users</span>
-                  <div className="text-2xl font-mono-num font-bold text-stone-900 mt-1">
+                <div className="p-4 rounded-xl bg-[#090E1D] border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Registered Users</span>
+                  <div className="text-2xl font-mono-num font-extrabold text-cyan-300 mt-1">
                     {adminStats.totalUsers}
                   </div>
-                  <span className="text-[11px] text-stone-500">
+                  <span className="text-[11px] text-slate-500">
                     {adminStats.activeUsers} active · {adminStats.suspendedUsers} suspended
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200">
-                  <span className="text-xs text-stone-600">Total Submissions</span>
-                  <div className="text-2xl font-mono-num font-bold text-stone-900 mt-1">
+                <div className="p-4 rounded-xl bg-[#090E1D] border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total Submissions</span>
+                  <div className="text-2xl font-mono-num font-extrabold text-indigo-300 mt-1">
                     {adminStats.totalSubmissions}
                   </div>
-                  <span className="text-[11px] text-stone-500">
+                  <span className="text-[11px] text-slate-500">
                     +{adminStats.draftCount} saved drafts
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200">
-                  <span className="text-xs text-stone-600">Pending & Review</span>
-                  <div className="text-2xl font-mono-num font-bold text-amber-800 mt-1">
+                <div className="p-4 rounded-xl bg-[#090E1D] border border-amber-500/30 shadow-[0_0_15px_rgba(251,191,36,0.15)]">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Pending & Review</span>
+                  <div className="text-2xl font-mono-num font-extrabold text-amber-300 mt-1">
                     {adminStats.pendingCount + adminStats.underReviewCount}
                   </div>
-                  <span className="text-[11px] text-stone-500">
+                  <span className="text-[11px] text-slate-500">
                     {adminStats.pendingCount} pending · {adminStats.underReviewCount} in review
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200">
-                  <span className="text-xs text-stone-600">Accepted</span>
-                  <div className="text-2xl font-mono-num font-bold text-sky-900 mt-1">
+                <div className="p-4 rounded-xl bg-[#090E1D] border border-sky-500/30 shadow-[0_0_15px_rgba(56,189,248,0.15)]">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Accepted</span>
+                  <div className="text-2xl font-mono-num font-extrabold text-sky-300 mt-1">
                     {adminStats.acceptedCount}
                   </div>
-                  <span className="text-[11px] text-stone-500">Ready to publish</span>
+                  <span className="text-[11px] text-slate-500">Ready to publish</span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200">
-                  <span className="text-xs text-stone-600">Rejected</span>
-                  <div className="text-2xl font-mono-num font-bold text-rose-800 mt-1">
+                <div className="p-4 rounded-xl bg-[#090E1D] border border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Rejected</span>
+                  <div className="text-2xl font-mono-num font-extrabold text-rose-300 mt-1">
                     {adminStats.rejectedCount}
                   </div>
-                  <span className="text-[11px] text-stone-500">
+                  <span className="text-[11px] text-slate-500">
                     {adminStats.revisionRequestedCount} revisions req.
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#FBF9F5] border border-stone-200">
-                  <span className="text-xs text-stone-600">Published</span>
-                  <div className="text-2xl font-mono-num font-bold text-emerald-800 mt-1">
+                <div className="p-4 rounded-xl bg-[#090E1D] border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Published</span>
+                  <div className="text-2xl font-mono-num font-extrabold text-emerald-300 mt-1">
                     {adminStats.publishedCount}
                   </div>
-                  <span className="text-[11px] text-stone-500">Live in catalog</span>
+                  <span className="text-[11px] text-slate-500">Live in catalog</span>
                 </div>
               </div>
 

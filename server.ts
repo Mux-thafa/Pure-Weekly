@@ -41,6 +41,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
 app.use(express.json({ limit: '5mb' }));
 
 interface AuthenticatedRequest extends Request {
@@ -118,9 +130,11 @@ function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFuncti
     res.status(401).json({ error: 'Authentication required. Please log in as Administrator.' });
     return;
   }
-  if (!isAdminRole(user.role)) {
+  const userEmail = (user.email || '').trim().toLowerCase();
+  const adminEmail = (process.env.ADMIN_EMAIL || CHIEF_EDITOR_EMAIL).trim().toLowerCase();
+  if (!isAdminRole(user.role) || userEmail !== adminEmail) {
     res.status(403).json({
-      error: 'Forbidden: Administrator (ADMIN) privileges are required for this operation.'
+      error: `Forbidden: Administrator privileges are strictly restricted to ${adminEmail}.`
     });
     return;
   }
@@ -201,7 +215,16 @@ app.post('/api/auth/login', (req, res) => {
 app.post('/api/auth/admin-login', (req, res) => {
   try {
     const { identifier = '', email = '', password = '' } = req.body || {};
-    const loginId = identifier || email;
+    const loginId = (identifier || email).trim().toLowerCase();
+    const adminEmail = (process.env.ADMIN_EMAIL || CHIEF_EDITOR_EMAIL).trim().toLowerCase();
+
+    // Strict requirement: admin login only seen and accessible for mohammedmusthafac3@gmail.com
+    if (loginId !== adminEmail) {
+      res.status(403).json({
+        error: `Admin login is strictly reserved for ${adminEmail}. Standard contributors should use Member Login.`
+      });
+      return;
+    }
     const result = authenticateUserLogin({
       identifier: loginId,
       password,
@@ -216,11 +239,19 @@ app.post('/api/auth/admin-login', (req, res) => {
   }
 });
 
-// Server-side Chief Editor session activation (verifies server-side admin account without exposing secrets in frontend)
-app.post('/api/auth/chief-editor-session', (_req, res) => {
+// Server-side Chief Editor session activation (strictly for mohammedmusthafac3@gmail.com)
+app.post('/api/auth/chief-editor-session', (req, res) => {
+  const { email = '' } = req.body || {};
+  const clientEmail = (email || '').trim().toLowerCase();
+  const adminEmail = (process.env.ADMIN_EMAIL || CHIEF_EDITOR_EMAIL).trim().toLowerCase();
+
+  if (clientEmail && clientEmail !== adminEmail) {
+    res.status(403).json({ error: `Chief Editor portal is strictly reserved for ${adminEmail}.` });
+    return;
+  }
   const db = loadDatabase();
   const adminUser = db.users.find(
-    (u) => u.uid === OFFICIAL_SAFWA_UID || isAdminRole(u.role)
+    (u) => (u.email.toLowerCase() === adminEmail || u.uid === OFFICIAL_SAFWA_UID) && isAdminRole(u.role)
   );
   if (!adminUser) {
     res.status(404).json({ error: 'Chief Editor account not found on server.' });
@@ -486,8 +517,8 @@ app.get('/api/manuscripts/:id', (req: AuthenticatedRequest, res) => {
   res.json({ manuscript });
 });
 
-app.post('/api/manuscripts', requireAuth, (req: AuthenticatedRequest, res) => {
-  const user = req.authUser!;
+app.post('/api/manuscripts', (req: AuthenticatedRequest, res) => {
+  const user = resolveOptionalUser(req);
   const db = loadDatabase();
   const raw = req.body || {};
 
@@ -498,13 +529,22 @@ app.post('/api/manuscripts', requireAuth, (req: AuthenticatedRequest, res) => {
       ? { aiScore: raw.aiScore, aiVerdict: raw.aiVerdict || 'Analyzed by Safwa Editorial AI Guard' }
       : analyzeManuscriptHeuristics(raw.content || '', raw.title || '');
 
+  const authorId = user?.uid || raw.authorId || `author_${Date.now()}`;
+  const authorName = raw.authorName || user?.name || 'Safwa Contributor';
+  const authorUsername = user?.username || raw.authorUsername || 'contributor';
+  const authorPhoto =
+    raw.authorPhoto ||
+    user?.photoUrl ||
+    makeAvatarSvg((authorName || 'SC').slice(0, 2), '#9A3412', '#FBF9F5');
+  const authorVerified = user?.isVerified ?? Boolean(raw.authorVerified);
+
   const sanitized = sanitizePostPayload({
-    authorId: user.uid,
-    authorName: raw.authorName || user.name,
-    authorUsername: user.username,
-    authorPhoto: raw.authorPhoto || user.photoUrl,
-    authorVerified: user.isVerified,
-    language: (raw.language as LanguageCode) || user.preferredLanguage || 'en',
+    authorId,
+    authorName,
+    authorUsername,
+    authorPhoto,
+    authorVerified,
+    language: (raw.language as LanguageCode) || user?.preferredLanguage || 'en',
     section: (raw.section as LiterarySection) || 'fiction',
     categoryId: raw.categoryId,
     title: raw.title || 'Untitled Manuscript',
@@ -533,7 +573,7 @@ app.post('/api/manuscripts', requireAuth, (req: AuthenticatedRequest, res) => {
     db.notifications.unshift({
       id: `notif_${Date.now()}`,
       targetUserId: OFFICIAL_SAFWA_UID,
-      actorId: user.uid,
+      actorId: authorId,
       actorName: newManuscript.authorName,
       type: 'submission',
       title: `New Submission (${newManuscript.aiScore}% AI): "${newManuscript.title}" by ${newManuscript.authorName}`,
@@ -979,7 +1019,11 @@ app.post('/api/ai-check', async (req, res) => {
   }
 
   try {
-    const response = await ai.models.generateContent({
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('AI authenticity check timed out')), 2000)
+    );
+
+    const callPromise = ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: `Analyze the following literary submission for AI-generated vs. authentic human authorship.
 Language: ${language}
@@ -987,7 +1031,7 @@ Section: ${section}
 Title: ${title}
 Subtitle: ${subtitle}
 Manuscript:
-${content.slice(0, 6000)}`,
+${content.slice(0, 4000)}`,
       config: {
         systemInstruction:
           'You are the Chief Literary Authenticity Auditor at Safwa Publishers. Estimate the percentage probability (0 to 100) that the submitted text was written by AI rather than a human author. Provide a concise 1-sentence editorial verdict and 2 brief linguistic signals.',
@@ -1014,6 +1058,7 @@ ${content.slice(0, 6000)}`,
       }
     });
 
+    const response = await Promise.race([callPromise, timeoutPromise]);
     const rawText = (response.text ?? '').trim();
     const parsed = JSON.parse(rawText);
     const aiScore = Math.max(0, Math.min(100, Math.round(Number(parsed.aiScore ?? fallback.aiScore))));

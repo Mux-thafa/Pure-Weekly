@@ -2,28 +2,40 @@
 
 @layer base {
   :root {
-    --bg-paper: #fbf9f5;
-    --bg-stone: #f3efe6;
-    --ink-primary: #1c1917;
-    --ink-muted: #57534e;
-    --accent-terracotta: #9a3412;
-    --accent-lapis: #1e3a8a;
+    --bg-deep: #060913;
+    --bg-surface: #0d1322;
+    --bg-surface-elevated: #141c33;
+    --ink-primary: #f8fafc;
+    --ink-muted: #94a3b8;
+    --glow-cyan: #06b6d4;
+    --glow-fuchsia: #d946ef;
+    --glow-emerald: #10b981;
+    --glow-amber: #f59e0b;
+    --glow-violet: #8b5cf6;
   }
 
   body {
-    background-color: var(--bg-paper);
+    background-color: var(--bg-deep);
     color: var(--ink-primary);
-    font-family: 'Plus Jakarta Sans', 'Noto Naskh Arabic', 'Noto Serif Malayalam', sans-serif;
+    font-family: 'Outfit', 'Plus Jakarta Sans', 'Cairo', 'Noto Serif Malayalam', sans-serif;
     -webkit-font-smoothing: antialiased;
     margin: 0;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.18), transparent),
+      radial-gradient(circle at 10% 25%, rgba(6, 182, 212, 0.12), transparent 45%),
+      radial-gradient(circle at 90% 40%, rgba(217, 70, 239, 0.14), transparent 50%),
+      radial-gradient(circle at 50% 90%, rgba(16, 185, 129, 0.1), transparent 45%);
+    background-attachment: fixed;
   }
 
   h1, h2, h3, .font-display {
-    font-family: 'Cormorant Garamond', 'Noto Naskh Arabic', 'Noto Serif Malayalam', Georgia, serif;
+    font-family: 'Syne', 'Outfit', 'Cinzel Decorative', 'Cairo', 'Noto Serif Malayalam', sans-serif;
+    letter-spacing: -0.02em;
   }
 
   .font-prose {
-    font-family: 'Source Serif 4', 'Noto Naskh Arabic', 'Noto Serif Malayalam', Georgia, serif;
+    font-family: 'Outfit', 'Cairo', 'Noto Serif Malayalam', sans-serif;
   }
 
   .font-mono-num {
@@ -32,19 +44,95 @@
   }
 }
 
-/* Smooth overscale hover transition requested for Safwa Publishers */
+/* Glowing Neon Utility Classes */
+.glow-cyan {
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.4), inset 0 0 15px rgba(6, 182, 212, 0.15);
+}
+
+.glow-fuchsia {
+  box-shadow: 0 0 30px rgba(217, 70, 239, 0.45), inset 0 0 15px rgba(217, 70, 239, 0.15);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), inset 0 0 15px rgba(16, 185, 129, 0.15);
+}
+
+.glow-amber {
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.4), inset 0 0 15px rgba(245, 158, 11, 0.15);
+}
+
+.glow-violet {
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.45), inset 0 0 15px rgba(139, 92, 246, 0.15);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 16px rgba(6, 182, 212, 0.7);
+}
+
+.text-glow-fuchsia {
+  text-shadow: 0 0 18px rgba(217, 70, 239, 0.75);
+}
+
+.text-glow-amber {
+  text-shadow: 0 0 16px rgba(245, 158, 11, 0.7);
+}
+
+.text-glow-emerald {
+  text-shadow: 0 0 16px rgba(16, 185, 129, 0.7);
+}
+
+/* Glowing Aurora Border Container */
+.aurora-card {
+  background: linear-gradient(135deg, rgba(20, 28, 51, 0.85) 0%, rgba(10, 15, 28, 0.95) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.aurora-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 35px rgba(6, 182, 212, 0.25), 0 0 15px rgba(217, 70, 239, 0.2);
+}
+
+/* Smooth overscale hover transition requested for Safwa Publishers with colorful glow */
 .overscale-box {
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease;
 }
 
 .overscale-box:hover {
   transform: scale(1.035);
+  box-shadow: 0 0 40px rgba(217, 70, 239, 0.4), 0 0 25px rgba(6, 182, 212, 0.35);
 }
 
 .overscale-card {
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .overscale-card:hover {
-  transform: scale(1.018);
+  transform: scale(1.02);
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.25), 0 0 15px rgba(139, 92, 246, 0.2);
+}
+
+/* Rainbow Neon Glowing Gradient Text */
+.gradient-rainbow-text {
+  background: linear-gradient(135deg, #38bdf8 0%, #c084fc 35%, #f472b6 70%, #facc15 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Shimmer animation for glowing badge borders */
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.8;
+    filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.6));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 22px rgba(217, 70, 239, 0.85));
+  }
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 3.5s ease-in-out infinite;
 }

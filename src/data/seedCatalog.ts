@@ -214,8 +214,9 @@ export const SEED_USERS: UserProfile[] = [
     uid: 'safwa_official_account',
     name: 'Safwa Publishers Official',
     username: 'safwapublishers',
-    bio: 'Official Editorial Desk of Safwa Publishers. Curating verified Arabic, Malayalam, and English literature.',
-    photoUrl: makeAvatarSvg('SP', '#9A3412', '#FBF9F5'),
+    email: 'mohammedmusthafac3@gmail.com',
+    bio: 'Official Editorial Desk & Administration of Safwa Publishers. Curating verified Arabic, Malayalam, and English literature.',
+    photoUrl: '/assets/aistudio/image_8895db7c.png',
     isVerified: true,
     role: 'admin',
     visibility: 'public',
@@ -223,48 +224,6 @@ export const SEED_USERS: UserProfile[] = [
     followingCount: 0,
     createdAt: '2026-01-10T09:00:00.000Z',
     updatedAt: '2026-10-30T09:00:00.000Z'
-  },
-  {
-    uid: 'author_layla_mansour',
-    name: 'Dr. Layla Al-Mansour',
-    username: 'layla_mansour',
-    bio: 'Essayist and philologist exploring Andalusian manuscripts, desert cartography, and classical Arabic poetics.',
-    photoUrl: makeAvatarSvg('LM', '#1E3A8A', '#FBF9F5'),
-    isVerified: true,
-    role: 'author',
-    visibility: 'public',
-    followersCount: 0,
-    followingCount: 0,
-    createdAt: '2026-02-14T10:00:00.000Z',
-    updatedAt: '2026-10-28T10:00:00.000Z'
-  },
-  {
-    uid: 'author_basheer_menon',
-    name: 'Aravind Vallathol',
-    username: 'aravind_malabar',
-    bio: 'Malayalam poet and short-story chronicler of monsoon harbors, Malabar tea rooms, and coastal memory.',
-    photoUrl: makeAvatarSvg('AV', '#14532D', '#FBF9F5'),
-    isVerified: true,
-    role: 'author',
-    visibility: 'public',
-    followersCount: 0,
-    followingCount: 0,
-    createdAt: '2026-03-01T11:00:00.000Z',
-    updatedAt: '2026-10-29T11:00:00.000Z'
-  },
-  {
-    uid: 'author_clara_vance',
-    name: 'Clara Vance-Sterling',
-    username: 'claravance',
-    bio: 'Literary fiction writer and comparative literature fellow focusing on archival mysteries and memory.',
-    photoUrl: makeAvatarSvg('CV', '#44403C', '#FBF9F5'),
-    isVerified: false,
-    role: 'author',
-    visibility: 'public',
-    followersCount: 0,
-    followingCount: 0,
-    createdAt: '2026-04-12T12:00:00.000Z',
-    updatedAt: '2026-10-29T12:00:00.000Z'
   }
 ];
 
@@ -287,19 +246,7 @@ export const SEED_NOTIFICATIONS: NotificationItem[] = [
   }
 ];
 
-export const SEED_MESSAGES: DirectMessage[] = [
-  {
-    id: 'msg_1',
-    senderId: 'safwa_official_account',
-    senderName: 'Safwa Publishers Official',
-    senderPhoto: makeAvatarSvg('SP', '#9A3412', '#FBF9F5'),
-    receiverId: 'author_layla_mansour',
-    receiverName: 'Dr. Layla Al-Mansour',
-    receiverPhoto: makeAvatarSvg('LM', '#1E3A8A', '#FBF9F5'),
-    text: 'Welcome to the Safwa Publishers Direct Desk. Your Blue Tick verification is active for publishing works and stories.',
-    createdAt: '2026-10-30T09:00:00.000Z'
-  }
-];
+export const SEED_MESSAGES: DirectMessage[] = [];
 
 export function formatLanguageLabel(lang: LanguageCode): string {
   if (lang === 'ar') return 'Arabic · العربية';

@@ -85,10 +85,30 @@ import {
 } from './components/DashboardAndAdminView';
 import { AboutView } from './components/AboutView';
 import { AuthModal, type AuthModalTab } from './components/AuthModal';
+import { FeaturedShowcaseHero } from './components/FeaturedShowcaseHero';
+import { ThreeLiteraryScene } from './components/ThreeLiteraryScene';
 
 type ActivePage = 'home' | 'submit' | 'about' | 'dashboard';
 
 const SESSION_STORAGE_KEY = 'safwa_auth_token';
+
+const GUEST_READER: UserProfile = {
+  uid: 'guest_reader',
+  name: 'Guest Reader',
+  username: 'reader',
+  email: '',
+  preferredLanguage: 'en',
+  bio: 'Exploring Arabic, Malayalam, and English literature on Safwa Publishers.',
+  photoUrl: makeAvatarSvg('GR', '#06B6D4', '#060913'),
+  isVerified: false,
+  role: 'reader',
+  accountStatus: 'active',
+  visibility: 'public',
+  followersCount: 0,
+  followingCount: 0,
+  createdAt: '2026-10-31T00:00:00.000Z',
+  updatedAt: '2026-10-31T00:00:00.000Z'
+};
 
 export default function App() {
   // Navigation & Language State
@@ -119,7 +139,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(SEED_NOTIFICATIONS);
   const [messages, setMessages] = useState<DirectMessage[]>(SEED_MESSAGES);
 
-  // User Auth & Session State
+  // User Auth & Session State: Unauthenticated visitor starts as Guest Reader by default
   const [sessionToken, setSessionToken] = useState<string | null>(() => {
     try {
       return localStorage.getItem(SESSION_STORAGE_KEY);
@@ -127,10 +147,16 @@ export default function App() {
       return null;
     }
   });
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return Boolean(localStorage.getItem(SESSION_STORAGE_KEY));
+    } catch {
+      return false;
+    }
+  });
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [currentUser, setCurrentUser] = useState<UserProfile>(SEED_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(GUEST_READER);
   const [likedPostIds, setLikedPostIds] = useState<Record<string, boolean>>({});
   const [followedAuthorIds, setFollowedAuthorIds] = useState<Record<string, boolean>>({});
 
@@ -558,7 +584,7 @@ export default function App() {
           );
           return;
         }
-      } else if (sessionToken) {
+      } else {
         const res = await fetch('/api/manuscripts', {
           method: 'POST',
           headers: getAuthHeaders(),
@@ -1068,6 +1094,8 @@ export default function App() {
     section: activeSectionFilter
   });
 
+  const publishedPosts = posts.filter((p) => p.status === 'published');
+
   const latestArticles = visiblePosts.filter((p) => p.section === 'non-fiction');
   const trendingPoems = visiblePosts.filter((p) => p.section === 'poetry');
   const weeksFiction = visiblePosts.filter((p) => p.section === 'fiction');
@@ -1091,23 +1119,26 @@ export default function App() {
       n.type === 'status_update'
   );
 
-  const isCurrentAdmin =
+  const isCurrentAdmin = Boolean(
     isAuthenticated &&
-    (firebaseUser?.email === CHIEF_EDITOR_EMAIL || isAdminRole(currentUser.role));
+    ((firebaseUser?.email || currentUser.email || '').trim().toLowerCase() ===
+      CHIEF_EDITOR_EMAIL.toLowerCase()) &&
+    isAdminRole(currentUser.role)
+  );
 
   return (
     <div
       dir={isPageRtl ? 'rtl' : 'ltr'}
-      className="min-h-screen flex flex-col bg-[#FBF9F5] text-stone-900"
+      className="min-h-screen flex flex-col bg-[#060913] text-slate-100"
     >
       {/* Top Utility Bar Above Menu Bar: Role-Aware Account Links + Notification Icon + Profile Icon */}
       <div
         dir="ltr"
-        className="bg-[#F3EFE6] border-b border-stone-200/90 px-6 py-2 text-xs text-stone-700"
+        className="bg-[#0A0F20]/90 border-b border-cyan-500/20 px-6 py-2.5 text-xs text-slate-300 backdrop-blur-xl shadow-[0_4px_25px_rgba(6,182,212,0.1)]"
       >
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="font-display italic text-stone-700">
+            <span className="font-display italic text-cyan-300/90 text-glow-cyan font-medium">
               Safwa Publishers · Trilingual Literary Archive (Arabic · Malayalam · English)
             </span>
           </div>
@@ -1115,52 +1146,53 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-3">
             {/* Quick Role-Adaptive Links */}
             {isAuthenticated ? (
-              <div className="hidden xl:flex items-center gap-3 mr-1 text-stone-600">
+              <div className="hidden xl:flex items-center gap-3 mr-1 text-slate-300">
                 <button
                   type="button"
                   onClick={() => {
                     setDashboardTab('my-profile');
                     setActivePage('dashboard');
                   }}
-                  className="hover:text-stone-950 whitespace-nowrap"
+                  className="hover:text-cyan-300 transition-colors whitespace-nowrap"
                 >
                   My Profile
                 </button>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="text-slate-600">·</span>
                 <button
                   type="button"
                   onClick={() => {
                     setDashboardTab('my-submissions');
                     setActivePage('dashboard');
                   }}
-                  className="hover:text-stone-950 whitespace-nowrap"
+                  className="hover:text-cyan-300 transition-colors whitespace-nowrap"
                 >
                   My Submissions
                 </button>
+                {/* Admin Dashboard: Strictly seen ONLY for mohammedmusthafac3@gmail.com */}
                 {isCurrentAdmin && (
                   <>
-                    <span aria-hidden="true">·</span>
+                    <span aria-hidden="true" className="text-slate-600">·</span>
                     <button
                       type="button"
                       onClick={() => {
                         setDashboardTab('admin-overview');
                         setActivePage('dashboard');
                       }}
-                      className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:underline whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 font-bold text-amber-300 bg-amber-950/40 border border-amber-400/40 px-2.5 py-1 rounded-lg hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all whitespace-nowrap"
                     >
-                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
                       <span>Admin Dashboard</span>
                     </button>
                   </>
                 )}
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="text-slate-600">·</span>
                 <button
                   type="button"
                   onClick={() => {
                     setDashboardTab('settings');
                     setActivePage('dashboard');
                   }}
-                  className="hover:text-stone-950 whitespace-nowrap"
+                  className="hover:text-cyan-300 transition-colors whitespace-nowrap"
                 >
                   Settings
                 </button>
@@ -1175,9 +1207,9 @@ export default function App() {
                 setIsMessagesOpen(true);
               }}
               aria-label="Open Direct Messages"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-700 hover:text-stone-950 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#121A30] border border-cyan-500/30 text-cyan-300 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all whitespace-nowrap font-medium"
             >
-              <MessageSquare className="w-3.5 h-3.5 text-amber-800" />
+              <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
               <span>{t.navMessages}</span>
             </button>
 
@@ -1188,11 +1220,11 @@ export default function App() {
                 onClick={() => setIsNotifDropdownOpen((o) => !o)}
                 aria-label="Notifications for newly published submissions"
                 aria-expanded={isNotifDropdownOpen}
-                className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FBF9F5] border border-stone-300 text-stone-800 hover:bg-stone-200/70 transition-colors"
+                className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#151733] border border-fuchsia-500/30 text-fuchsia-300 hover:border-fuchsia-400 hover:shadow-[0_0_15px_rgba(217,70,239,0.4)] transition-all"
               >
-                <Bell className="w-3.5 h-3.5 text-amber-800" />
+                <Bell className="w-3.5 h-3.5 text-fuchsia-400" />
                 <span>Notifications</span>
-                <span className="font-mono-num font-bold text-amber-900">
+                <span className="font-mono-num font-bold text-amber-300 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]">
                   ({publishedNotifications.length})
                 </span>
               </button>
@@ -1201,21 +1233,21 @@ export default function App() {
                 <div
                   role="region"
                   aria-label="Published Submissions Notifications"
-                  className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#FBF9F5] border border-stone-300 rounded-xl shadow-xl z-40 overflow-hidden"
+                  className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#0D1326] border border-fuchsia-500/30 rounded-2xl shadow-[0_0_35px_rgba(217,70,239,0.25)] z-40 overflow-hidden text-slate-100"
                 >
-                  <div className="px-4 py-3 bg-[#F3EFE6] border-b border-stone-200 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-stone-900">
+                  <div className="px-4 py-3 bg-[#131936] border-b border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-cyan-300">
                       Published Works & Editorial Alerts
                     </span>
                     <button
                       type="button"
                       onClick={() => setIsNotifDropdownOpen(false)}
-                      className="text-[11px] text-stone-500 hover:text-stone-900"
+                      className="text-[11px] text-slate-400 hover:text-white"
                     >
                       Close
                     </button>
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-stone-200/70">
+                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-800/80">
                     {publishedNotifications.map((notif) => (
                       <button
                         key={notif.id}
@@ -1229,17 +1261,17 @@ export default function App() {
                             setActivePage('dashboard');
                           }
                         }}
-                        className="w-full px-4 py-3 text-left hover:bg-stone-200/50 transition-colors block"
+                        className="w-full px-4 py-3 text-left hover:bg-white/5 transition-colors block"
                       >
-                        <p className="text-xs font-semibold text-stone-900 leading-snug">
+                        <p className="text-xs font-bold text-slate-100 leading-snug">
                           {notif.title}
                         </p>
                         {notif.message && (
-                          <p className="text-[11px] text-stone-600 mt-0.5 line-clamp-2">
+                          <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
                             {notif.message}
                           </p>
                         )}
-                        <span className="text-[10px] text-stone-500 font-mono-num mt-1 block">
+                        <span className="text-[10px] text-cyan-400/80 font-mono-num mt-1 block">
                           By {notif.actorName} ·{' '}
                           {new Date(notif.createdAt).toLocaleDateString()}
                         </span>
@@ -1256,15 +1288,15 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleOpenAuthModal('login')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-stone-300 text-xs font-semibold text-stone-900 hover:bg-stone-100 whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#121A30] border border-cyan-500/40 text-xs font-bold text-cyan-200 hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] whitespace-nowrap transition-all"
                 >
-                  <LogIn className="w-3.5 h-3.5 text-amber-800" />
+                  <LogIn className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Login</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleOpenAuthModal('register')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 text-xs font-semibold text-white hover:bg-stone-800 whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 text-xs font-bold text-white hover:shadow-[0_0_20px_rgba(217,70,239,0.5)] whitespace-nowrap transition-all"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>Register</span>
@@ -1274,16 +1306,8 @@ export default function App() {
               <>
                 <button
                   type="button"
-                  onClick={() => handleOpenAuthModal('login')}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-stone-300 text-xs font-semibold text-stone-900 hover:bg-stone-100 whitespace-nowrap"
-                >
-                  <LogIn className="w-3.5 h-3.5 text-amber-800" />
-                  <span>Login / Register</span>
-                </button>
-                <button
-                  type="button"
                   onClick={handleSignOut}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-stone-900 whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-300 bg-rose-950/40 border border-rose-500/40 rounded-xl hover:bg-rose-900/50 hover:shadow-[0_0_15px_rgba(244,63,94,0.4)] whitespace-nowrap transition-all"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Logout</span>
@@ -1299,15 +1323,15 @@ export default function App() {
                 setActivePage('dashboard');
               }}
               aria-label="Open User Dashboard"
-              className="inline-flex items-center gap-2 pl-2 pr-3 py-1 rounded-full bg-[#FBF9F5] border border-stone-300 hover:border-amber-800 transition-colors"
+              className="inline-flex items-center gap-2 pl-2 pr-3 py-1 rounded-full bg-[#10182E] border border-cyan-500/30 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(6,182,212,0.35)] transition-all"
             >
               <img
                 src={currentUser.photoUrl}
                 alt={currentUser.name}
                 referrerPolicy="no-referrer"
-                className="w-6 h-6 rounded-full object-cover"
+                className="w-6 h-6 rounded-full object-cover border border-cyan-400"
               />
-              <span className="text-xs font-semibold text-stone-900 truncate max-w-[110px]">
+              <span className="text-xs font-bold text-slate-200 truncate max-w-[120px]">
                 {currentUser.name}
               </span>
               {currentUser.isVerified && <BlueTickBadge size={13} />}
@@ -1316,25 +1340,32 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Top Navigation Bar (Strict 3-Zone Contract: Brand Wordmark — Nav Links — 1 Primary Action) */}
-      <header className="sticky top-0 z-30 bg-[#FBF9F5]/95 backdrop-blur-xs border-b border-stone-200 px-6 py-4">
+      {/* Main Top Navigation Bar (Strict 3-Zone Contract with Radiant Glowing Aesthetic) */}
+      <header className="sticky top-0 z-30 bg-[#080D1D]/90 backdrop-blur-2xl border-b border-cyan-500/20 px-6 py-4 shadow-[0_10px_35px_rgba(0,0,0,0.6)]">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
-          {/* Zone 1: Single-line Brand Wordmark */}
+          {/* Zone 1: Single-line Brand Wordmark with Emblem & Rainbow Gradient Glow */}
           <a
             href="#home"
             onClick={(e) => {
               e.preventDefault();
               setActivePage('home');
             }}
-            className="text-2xl font-display font-bold tracking-tight text-stone-900 whitespace-nowrap shrink-0"
+            className="group flex items-center gap-3 text-2xl font-display font-black tracking-tight whitespace-nowrap shrink-0"
           >
-            {t.brandTitle}
+            <img
+              src="/assets/aistudio/image_8895db7c.png"
+              alt="Safwa Publishers Emblem"
+              className="w-8 h-8 rounded-full object-cover shadow-[0_0_16px_rgba(6,182,212,0.6)] border border-cyan-400/50 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(217,70,239,0.7)] transition-all"
+            />
+            <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(217,70,239,0.5)]">
+              {t.brandTitle}
+            </span>
           </a>
 
-          {/* Zone 2: Concise Nav Links (Home, Languages [Hover Dropdown], Submit [Hover Dropdown], About, Dashboard) */}
+          {/* Zone 2: Concise Nav Links (Home, Languages, Submit, About, Dashboard) */}
           <nav
             aria-label="Primary Navigation"
-            className="flex items-center gap-6 text-sm font-medium text-stone-700"
+            className="flex items-center gap-6 text-sm font-bold text-slate-300"
           >
             <button
               type="button"
@@ -1342,13 +1373,14 @@ export default function App() {
                 setActivePage('home');
                 setActiveSectionFilter('all');
               }}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
-                activePage === 'home' ? 'text-amber-900 font-semibold underline underline-offset-8' : ''
+              className={`hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 ${
+                activePage === 'home'
+                  ? 'text-cyan-300 text-glow-cyan border-b-2 border-cyan-400 pb-0.5'
+                  : ''
               }`}
             >
               {t.navHome}
             </button>
-
             {/* Languages Hover & Click Dropdown: Arabic, Malayalam, English */}
             <div
               className="relative"
@@ -1359,52 +1391,52 @@ export default function App() {
                 type="button"
                 onClick={() => setIsLangMenuOpen(true)}
                 aria-expanded={isLangMenuOpen}
-                className="inline-flex items-center gap-1 hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 py-1"
+                className="inline-flex items-center gap-1 text-slate-300 hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 py-1"
               >
                 <span>{t.navLanguages}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3.5 h-3.5 text-cyan-400" />
               </button>
 
               {isLangMenuOpen && (
                 <div
                   role="menu"
                   aria-label="Select Language Edition"
-                  className="absolute left-0 top-full pt-1 w-52 z-40"
+                  className="absolute left-0 top-full pt-1.5 w-52 z-40"
                 >
-                  <div className="bg-[#FBF9F5] border border-stone-300 rounded-xl shadow-xl py-1.5 overflow-hidden">
+                  <div className="bg-[#0D1426]/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.25)] py-2 overflow-hidden backdrop-blur-xl">
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => handleSelectLanguage('ar')}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold text-stone-800 hover:bg-[#F3EFE6] flex items-center justify-between"
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-cyan-300 flex items-center justify-between"
                     >
                       <span>Arabic</span>
-                      <span className="font-display text-sm">العربية</span>
+                      <span className="font-display text-sm text-cyan-300">العربية</span>
                     </button>
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => handleSelectLanguage('ml')}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold text-stone-800 hover:bg-[#F3EFE6] flex items-center justify-between"
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-cyan-300 flex items-center justify-between"
                     >
                       <span>Malayalam</span>
-                      <span className="text-xs">മലയാളം</span>
+                      <span className="text-xs text-fuchsia-300">മലയാളം</span>
                     </button>
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => handleSelectLanguage('en')}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold text-stone-800 hover:bg-[#F3EFE6] flex items-center justify-between"
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-cyan-300 flex items-center justify-between"
                     >
                       <span>English</span>
-                      <span className="text-[11px] text-stone-500">EN</span>
+                      <span className="text-[11px] text-amber-300 font-mono">EN</span>
                     </button>
-                    <div className="border-t border-stone-200 mt-1 pt-1">
+                    <div className="border-t border-slate-800 mt-1.5 pt-1.5">
                       <button
                         type="button"
                         role="menuitem"
                         onClick={() => handleSelectLanguage('all')}
-                        className="w-full px-4 py-2 text-left text-xs text-stone-600 hover:bg-[#F3EFE6]"
+                        className="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-white/10 hover:text-white"
                       >
                         {t.allLanguagesLabel}
                       </button>
@@ -1428,23 +1460,23 @@ export default function App() {
                   setIsSubmitMenuOpen(false);
                 }}
                 aria-expanded={isSubmitMenuOpen}
-                className={`inline-flex items-center gap-1 hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 py-1 ${
+                className={`inline-flex items-center gap-1 text-slate-300 hover:text-fuchsia-300 transition-colors whitespace-nowrap shrink-0 py-1 ${
                   activePage === 'submit'
-                    ? 'text-amber-900 font-semibold underline underline-offset-8'
+                    ? 'text-fuchsia-300 text-glow-fuchsia border-b-2 border-fuchsia-400 pb-0.5'
                     : ''
                 }`}
               >
                 <span>{t.navSubmit}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3.5 h-3.5 text-fuchsia-400" />
               </button>
 
               {isSubmitMenuOpen && (
                 <div
                   role="menu"
                   aria-label="Submit by Literary Section"
-                  className="absolute left-0 top-full pt-1 w-48 z-40"
+                  className="absolute left-0 top-full pt-1.5 w-48 z-40"
                 >
-                  <div className="bg-[#FBF9F5] border border-stone-300 rounded-xl shadow-xl py-1.5 overflow-hidden">
+                  <div className="bg-[#0D1426]/95 border border-fuchsia-500/30 rounded-2xl shadow-[0_0_35px_rgba(217,70,239,0.25)] py-2 overflow-hidden backdrop-blur-xl">
                     <button
                       type="button"
                       role="menuitem"
@@ -1454,7 +1486,7 @@ export default function App() {
                         setActivePage('submit');
                         setIsSubmitMenuOpen(false);
                       }}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold text-stone-800 hover:bg-[#F3EFE6]"
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-fuchsia-300"
                     >
                       {t.secFiction}
                     </button>
@@ -1467,7 +1499,7 @@ export default function App() {
                         setActivePage('submit');
                         setIsSubmitMenuOpen(false);
                       }}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold text-stone-800 hover:bg-[#F3EFE6]"
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-fuchsia-300"
                     >
                       {t.secPoetry}
                     </button>
@@ -1480,7 +1512,7 @@ export default function App() {
                         setActivePage('submit');
                         setIsSubmitMenuOpen(false);
                       }}
-                      className="w-full px-4 py-2.5 text-left text-xs font-semibold text-stone-800 hover:bg-[#F3EFE6]"
+                      className="w-full px-4 py-2.5 text-left text-xs font-bold text-slate-200 hover:bg-white/10 hover:text-fuchsia-300"
                     >
                       {t.secNonFiction}
                     </button>
@@ -1492,8 +1524,8 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActivePage('about')}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
-                activePage === 'about' ? 'text-amber-900 font-semibold underline underline-offset-8' : ''
+              className={`hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 ${
+                activePage === 'about' ? 'text-cyan-300 text-glow-cyan border-b-2 border-cyan-400 pb-0.5' : ''
               }`}
             >
               {t.navAbout}
@@ -1501,10 +1533,24 @@ export default function App() {
 
             <button
               type="button"
+              onClick={() => {
+                setActivePage('home');
+                setTimeout(() => {
+                  document.getElementById('threejs-studio')?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-300 hover:text-white px-2.5 py-1 rounded-lg bg-cyan-950/40 border border-cyan-500/30 hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(6,182,212,0.4)] transition-all whitespace-nowrap shrink-0"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span>3D Scenes</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActivePage('dashboard')}
-              className={`hover:text-stone-950 transition-colors whitespace-nowrap shrink-0 ${
+              className={`hover:text-cyan-300 transition-colors whitespace-nowrap shrink-0 ${
                 activePage === 'dashboard'
-                  ? 'text-amber-900 font-semibold underline underline-offset-8'
+                  ? 'text-cyan-300 text-glow-cyan border-b-2 border-cyan-400 pb-0.5'
                   : ''
               }`}
             >
@@ -1512,7 +1558,7 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action Button */}
+          {/* Zone 3: 1 Primary Action Button with Radiant Glowing Gradient */}
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
@@ -1520,7 +1566,7 @@ export default function App() {
                 setEditingDraft(null);
                 setActivePage('submit');
               }}
-              className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap shrink-0"
+              className="overscale-box px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-fuchsia-600 via-pink-600 to-amber-500 rounded-full hover:shadow-[0_0_35px_rgba(217,70,239,0.7)] transition-all whitespace-nowrap shrink-0 border border-pink-400/40"
             >
               {t.writeOnSafwaTitle}
             </button>
@@ -1541,17 +1587,17 @@ export default function App() {
       <main className="flex-1">
         {activePage === 'home' && (
           <div className="max-w-7xl mx-auto px-6 py-10 space-y-12">
-            {/* Active Editorial Announcements Ribbon */}
+            {/* Active Editorial Announcements Ribbon with Amber/Solar Glow */}
             {activeAnnouncements.length > 0 && (
               <div
                 role="region"
                 aria-label="Editorial Announcements"
-                className="p-4 rounded-xl bg-[#F3EFE6] border border-stone-300 flex flex-wrap items-center justify-between gap-4"
+                className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-fuchsia-950/30 to-cyan-950/30 border border-amber-400/40 shadow-[0_0_30px_rgba(245,158,11,0.25)] flex flex-wrap items-center justify-between gap-4 backdrop-blur-xl"
               >
                 <div className="flex items-start sm:items-center gap-3">
-                  <Megaphone className="w-4 h-4 text-amber-800 shrink-0 mt-0.5 sm:mt-0" />
-                  <div className="text-xs text-stone-800">
-                    <strong className="font-semibold text-stone-950">
+                  <Megaphone className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+                  <div className="text-xs text-slate-200">
+                    <strong className="font-bold text-amber-200 text-glow-amber">
                       {activeAnnouncements[0].title}:
                     </strong>{' '}
                     <span>{activeAnnouncements[0].content}</span>
@@ -1560,120 +1606,74 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActivePage('submit')}
-                  className="text-xs font-semibold text-amber-900 hover:underline whitespace-nowrap"
+                  className="text-xs font-bold text-amber-300 hover:text-amber-200 hover:underline whitespace-nowrap drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]"
                 >
                   Submit Manuscript →
                 </button>
               </div>
             )}
 
-            {/* Hero Split + Overscaling "Write on Safwa Publishers" Box */}
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-              {/* Lead Literary Feature (7 columns) */}
-              <div className="lg:col-span-7 flex flex-col justify-between p-8 rounded-2xl bg-[#F3EFE6] border border-stone-200/90">
+            {/* Featured Showcase Hero: Exactly matches the requested modern design */}
+            <FeaturedShowcaseHero
+              publishedPosts={publishedPosts}
+              activeLanguage={activeLanguage}
+              onOpenPost={handleOpenPost}
+              onLikePost={handleToggleLike}
+            />
+
+            {/* "Latest Masterpieces" Section Header & Overscaling Callout Box */}
+            <section className="space-y-6 pt-2">
+              <div className="flex flex-wrap items-baseline justify-between border-b border-cyan-500/20 pb-4 gap-4">
                 <div>
-                  <div className="flex items-center gap-2 text-xs text-amber-900 font-semibold uppercase tracking-widest mb-3">
-                    <span>Safwa Quarterly Monograph</span>
-                    <span aria-hidden="true">·</span>
-                    <span>
-                      {languageFilterAll
-                        ? t.allLanguagesLabel
-                        : formatLanguageLabel(activeLanguage)}
+                  <h2 className="text-3xl sm:text-4xl font-display font-black text-white tracking-tight flex items-center gap-3">
+                    <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(217,70,239,0.4)]">
+                      Latest Masterpieces
                     </span>
-                  </div>
-
-                  <h1
-                    className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold text-stone-900 leading-tight"
-                    style={{ textWrap: 'balance' }}
-                  >
-                    {visiblePosts[0]?.title || t.brandTitle}
-                  </h1>
-
-                  <p className="text-base font-prose text-stone-700 mt-4 leading-relaxed line-clamp-3">
-                    {visiblePosts[0]?.subtitle ||
-                      'Curated Arabic, Malayalam, and English Fiction, Poetry, and Non-Fiction verified for authentic human authorship.'}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Curated Fiction, Poetry, and Critical Monographs across Arabic, Malayalam, and English
                   </p>
                 </div>
-
-                {visiblePosts[0] ? (
-                  <div className="pt-6 mt-6 border-t border-stone-300/70 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-2.5">
-                      <img
-                        src={visiblePosts[0].authorPhoto}
-                        alt={visiblePosts[0].authorName}
-                        referrerPolicy="no-referrer"
-                        className="w-9 h-9 rounded-full object-cover border border-stone-300"
-                      />
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs font-semibold text-stone-900">
-                            {visiblePosts[0].authorName}
-                          </span>
-                          {visiblePosts[0].authorVerified && <BlueTickBadge size={14} />}
-                        </div>
-                        <span className="text-[11px] text-stone-500 font-mono-num">
-                          {visiblePosts[0].viewsCount} {t.viewsLabel} · {visiblePosts[0].aiScore}% AI
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenPost(visiblePosts[0])}
-                      className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap"
-                    >
-                      {t.readFullArticle}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="pt-6 mt-6 border-t border-stone-300/70 flex flex-wrap items-center justify-between gap-4">
-                    <p className="text-xs text-stone-600">
-                      Be the premier contributor to Safwa Publishers. Submit your fiction, poetry, or monograph.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setActivePage('submit')}
-                      className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap"
-                    >
-                      {t.writeOnSafwaCta}
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 font-mono">
+                    {visiblePosts.length} Works
+                  </span>
+                </div>
               </div>
 
-              {/* Requested Overscaling Box: "Write on Safwa Publishers" (5 columns) */}
+              {/* Requested Overscaling Box: "Write on Safwa Publishers" (Banner Layout) */}
               <div
                 onClick={() => setActivePage('submit')}
                 role="region"
                 aria-label="Write on Safwa Publishers Overscaling Callout"
-                className="overscale-box lg:col-span-5 cursor-pointer p-8 rounded-2xl bg-stone-900 text-stone-100 border border-stone-800 flex flex-col justify-between shadow-lg"
+                className="overscale-box cursor-pointer p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#121A36] via-[#1F183C] to-[#2B132C] border-2 border-fuchsia-500/50 flex flex-wrap items-center justify-between gap-6 shadow-[0_0_35px_rgba(217,70,239,0.3)] text-slate-100"
               >
-                <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-amber-400 font-semibold">
-                    <PenTool className="w-4 h-4" />
+                <div className="space-y-2 max-w-2xl">
+                  <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-amber-300 font-bold drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]">
+                    <PenTool className="w-4 h-4 text-amber-400" />
                     <span>Open Trilingual Call for Manuscripts</span>
                   </div>
 
-                  <h2 className="text-3xl font-display font-bold text-white leading-snug">
+                  <h3 className="text-2xl sm:text-3xl font-display font-black text-white leading-snug drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]">
                     {t.writeOnSafwaTitle}
-                  </h2>
+                  </h3>
 
-                  <p className="text-sm text-stone-300 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
                     {t.writeOnSafwaSub}
                   </p>
                 </div>
 
-                <div className="pt-6 mt-6 border-t border-stone-800 flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-xs text-stone-400">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <span className="text-xs text-cyan-300 font-mono font-medium">
                     Arabic · Malayalam · English
-                  </div>
+                  </span>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setActivePage('submit');
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-stone-950 bg-amber-400 rounded-lg hover:bg-amber-300 transition-colors whitespace-nowrap"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-amber-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 rounded-xl hover:from-amber-300 hover:to-yellow-300 shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all whitespace-nowrap"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>{t.writeOnSafwaCta}</span>
@@ -1682,19 +1682,46 @@ export default function App() {
               </div>
             </section>
 
-            {/* Interactive Language & Section Filter Bar */}
+            {/* Interactive Three.js 3D Literary Studio & Codex Section */}
+            <section id="threejs-studio" aria-label="Interactive 3D Literary Studio" className="space-y-4 pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-cyan-500/20">
+                <div>
+                  <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-cyan-400 font-bold mb-1">
+                    <Sparkles className="w-4 h-4 text-cyan-400" />
+                    <span>Three.js WebGL Real-time Experience</span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight flex items-center gap-2">
+                    <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(217,70,239,0.4)]">
+                      Interactive 3D Codex & Celestial Cosmos
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                    Explore 3D procedurally illuminated manuscripts, the Golden Calligraphy Quill with liquid ink ripples, and the Trilingual Astrolabe Sphere. Click and drag in 360&deg; to inspect the craftsmanship.
+                  </p>
+                </div>
+              </div>
+
+              <ThreeLiteraryScene
+                initialMode="codex"
+                heightClass="h-[460px] sm:h-[540px]"
+                showControls={true}
+                interactive={true}
+              />
+            </section>
+
+            {/* Interactive Language & Section Filter Bar with Glowing Active States */}
             <section
               aria-label="Language and Section Filter Controls"
-              className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-stone-200"
+              className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800"
             >
-              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#F3EFE6] rounded-xl border border-stone-200">
+              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#0D1426] rounded-2xl border border-slate-800">
                 <button
                   type="button"
                   onClick={() => handleSelectLanguage('all')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     languageFilterAll
-                      ? 'bg-stone-900 text-white'
-                      : 'text-stone-700 hover:text-stone-950'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.5)] border border-cyan-400/40'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   {t.allLanguagesLabel}
@@ -1702,10 +1729,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectLanguage('ar')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     !languageFilterAll && activeLanguage === 'ar'
-                      ? 'bg-stone-900 text-white'
-                      : 'text-stone-700 hover:text-stone-950'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.5)] border border-cyan-400/40'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   Arabic (العربية)
@@ -1713,10 +1740,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectLanguage('ml')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     !languageFilterAll && activeLanguage === 'ml'
-                      ? 'bg-stone-900 text-white'
-                      : 'text-stone-700 hover:text-stone-950'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.5)] border border-cyan-400/40'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   Malayalam (മലയാളം)
@@ -1724,17 +1751,17 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectLanguage('en')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     !languageFilterAll && activeLanguage === 'en'
-                      ? 'bg-stone-900 text-white'
-                      : 'text-stone-700 hover:text-stone-950'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.5)] border border-cyan-400/40'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   English
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#F3EFE6] rounded-xl border border-stone-200">
+              <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#0D1426] rounded-2xl border border-slate-800">
                 {(
                   [
                     { id: 'all', label: t.secAll },
@@ -1747,10 +1774,10 @@ export default function App() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveSectionFilter(tab.id)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                    className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                       activeSectionFilter === tab.id
-                        ? 'bg-amber-800 text-white'
-                        : 'text-stone-700 hover:text-stone-950'
+                        ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white shadow-[0_0_20px_rgba(217,70,239,0.5)] border border-fuchsia-400/40'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     {tab.label}
@@ -1762,22 +1789,25 @@ export default function App() {
             {/* Section 1: Latest Articles (Non-Fiction) */}
             {(activeSectionFilter === 'all' || activeSectionFilter === 'non-fiction') && (
               <section aria-label={t.latestArticles} className="space-y-6">
-                <div className="flex items-baseline justify-between border-b border-stone-200 pb-3">
-                  <h2 className="text-2xl md:text-3xl font-display font-bold text-stone-900">
-                    01. {t.latestArticles}
+                <div className="flex items-baseline justify-between border-b border-cyan-500/20 pb-3">
+                  <h2 className="text-2xl md:text-3xl font-display font-extrabold text-white tracking-tight flex items-center gap-2">
+                    <span className="text-cyan-400 text-lg font-mono">01.</span>
+                    <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                      {t.latestArticles}
+                    </span>
                   </h2>
-                  <span className="text-xs text-stone-500 font-mono-num">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 font-mono">
                     {latestArticles.length} Works
                   </span>
                 </div>
 
                 {latestArticles.length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-[#F3EFE6]/60 border border-dashed border-stone-300 text-center space-y-3">
-                    <p className="text-sm font-display font-semibold text-stone-800">
+                  <div className="p-10 rounded-3xl bg-[#0D1426]/70 border border-dashed border-cyan-500/30 text-center space-y-4">
+                    <p className="text-base font-display font-bold text-white">
                       No published articles in this edition yet
                     </p>
-                    <p className="text-xs text-stone-600 max-w-md mx-auto">
-                      Safwa Publishers is freshly inaugurated. Share your research, literary essay, or monograph.
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      Safwa Publishers is freshly inaugurated. Share your research, literary essay, or monograph with the community.
                     </p>
                     <button
                       type="button"
@@ -1785,9 +1815,9 @@ export default function App() {
                         setSubmitDefaultSection('non-fiction');
                         setActivePage('submit');
                       }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-stone-900 bg-white border border-stone-300 rounded-lg hover:bg-stone-100 transition-colors"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-cyan-950 bg-gradient-to-r from-cyan-400 to-teal-300 rounded-xl hover:shadow-[0_0_20px_rgba(6,182,212,0.6)] transition-all"
                     >
-                      <PenTool className="w-3.5 h-3.5 text-amber-800" />
+                      <PenTool className="w-4 h-4 text-cyan-950" />
                       <span>Submit an Article</span>
                     </button>
                   </div>
@@ -1813,21 +1843,24 @@ export default function App() {
             {/* Section 2: Trending Poems (Poetry) */}
             {(activeSectionFilter === 'all' || activeSectionFilter === 'poetry') && (
               <section aria-label={t.trendingPoems} className="space-y-6">
-                <div className="flex items-baseline justify-between border-b border-stone-200 pb-3">
-                  <h2 className="text-2xl md:text-3xl font-display font-bold text-stone-900">
-                    02. {t.trendingPoems}
+                <div className="flex items-baseline justify-between border-b border-fuchsia-500/20 pb-3">
+                  <h2 className="text-2xl md:text-3xl font-display font-extrabold text-white tracking-tight flex items-center gap-2">
+                    <span className="text-fuchsia-400 text-lg font-mono">02.</span>
+                    <span className="bg-gradient-to-r from-fuchsia-400 via-pink-400 to-rose-400 bg-clip-text text-transparent">
+                      {t.trendingPoems}
+                    </span>
                   </h2>
-                  <span className="text-xs text-stone-500 font-mono-num">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-fuchsia-950/60 border border-fuchsia-500/30 text-fuchsia-300 font-mono">
                     {trendingPoems.length} Works
                   </span>
                 </div>
 
                 {trendingPoems.length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-[#F3EFE6]/60 border border-dashed border-stone-300 text-center space-y-3">
-                    <p className="text-sm font-display font-semibold text-stone-800">
+                  <div className="p-10 rounded-3xl bg-[#0D1426]/70 border border-dashed border-fuchsia-500/30 text-center space-y-4">
+                    <p className="text-base font-display font-bold text-white">
                       No published poems in this edition yet
                     </p>
-                    <p className="text-xs text-stone-600 max-w-md mx-auto">
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
                       Be the premier poet on Safwa. Submit your verses in Arabic, Malayalam, or English.
                     </p>
                     <button
@@ -1836,9 +1869,9 @@ export default function App() {
                         setSubmitDefaultSection('poetry');
                         setActivePage('submit');
                       }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-stone-900 bg-white border border-stone-300 rounded-lg hover:bg-stone-100 transition-colors"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-fuchsia-600 to-pink-500 rounded-xl hover:shadow-[0_0_20px_rgba(217,70,239,0.6)] transition-all"
                     >
-                      <PenTool className="w-3.5 h-3.5 text-amber-800" />
+                      <PenTool className="w-4 h-4 text-white" />
                       <span>Submit Poetry</span>
                     </button>
                   </div>
@@ -1864,21 +1897,24 @@ export default function App() {
             {/* Section 3: This Week's Fiction (Fiction) */}
             {(activeSectionFilter === 'all' || activeSectionFilter === 'fiction') && (
               <section aria-label={t.thisWeeksFiction} className="space-y-6">
-                <div className="flex items-baseline justify-between border-b border-stone-200 pb-3">
-                  <h2 className="text-2xl md:text-3xl font-display font-bold text-stone-900">
-                    03. {t.thisWeeksFiction}
+                <div className="flex items-baseline justify-between border-b border-amber-500/20 pb-3">
+                  <h2 className="text-2xl md:text-3xl font-display font-extrabold text-white tracking-tight flex items-center gap-2">
+                    <span className="text-amber-400 text-lg font-mono">03.</span>
+                    <span className="bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-300 bg-clip-text text-transparent">
+                      {t.thisWeeksFiction}
+                    </span>
                   </h2>
-                  <span className="text-xs text-stone-500 font-mono-num">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-950/60 border border-amber-500/30 text-amber-300 font-mono">
                     {weeksFiction.length} Works
                   </span>
                 </div>
 
                 {weeksFiction.length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-[#F3EFE6]/60 border border-dashed border-stone-300 text-center space-y-3">
-                    <p className="text-sm font-display font-semibold text-stone-800">
+                  <div className="p-10 rounded-3xl bg-[#0D1426]/70 border border-dashed border-amber-500/30 text-center space-y-4">
+                    <p className="text-base font-display font-bold text-white">
                       No published stories or novellas yet
                     </p>
-                    <p className="text-xs text-stone-600 max-w-md mx-auto">
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
                       Begin a new narrative on Safwa. Submit your short story or chapter manuscript.
                     </p>
                     <button
@@ -1887,9 +1923,9 @@ export default function App() {
                         setSubmitDefaultSection('fiction');
                         setActivePage('submit');
                       }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-stone-900 bg-white border border-stone-300 rounded-lg hover:bg-stone-100 transition-colors"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-amber-950 bg-gradient-to-r from-amber-400 to-yellow-300 rounded-xl hover:shadow-[0_0_20px_rgba(251,191,36,0.6)] transition-all"
                     >
-                      <PenTool className="w-3.5 h-3.5 text-amber-800" />
+                      <PenTool className="w-4 h-4 text-amber-950" />
                       <span>Submit Fiction</span>
                     </button>
                   </div>
@@ -1991,43 +2027,44 @@ export default function App() {
         )}
       </main>
 
-      {/* Clean Editorial Footer */}
-      <footer className="border-t border-stone-200 bg-[#F3EFE6] px-6 py-8 mt-16">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-600">
-          <div className="flex items-center gap-2">
-            <span className="font-display font-bold text-sm text-stone-900">
+      {/* Radiant Glowing Footer */}
+      <footer className="border-t border-slate-800 bg-[#060913] px-6 py-10 mt-20 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-fuchsia-500/5 to-purple-500/5 pointer-events-none" />
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-slate-400 relative z-10">
+          <div className="flex items-center gap-3">
+            <span className="font-display font-extrabold text-base bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent">
               Safwa Publishers
             </span>
-            <BlueTickBadge size={14} />
-            <span>· Arabic, Malayalam & English Literary House</span>
+            <BlueTickBadge size={16} />
+            <span className="text-slate-400">· Trilingual Arabic, Malayalam & English Literary Portal</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-6">
             <button
               type="button"
               onClick={() => setActivePage('home')}
-              className="hover:text-stone-950"
+              className="text-slate-300 hover:text-cyan-400 transition-colors"
             >
               {t.navHome}
             </button>
             <button
               type="button"
               onClick={() => setActivePage('submit')}
-              className="hover:text-stone-950"
+              className="text-slate-300 hover:text-fuchsia-400 transition-colors"
             >
               {t.navSubmit}
             </button>
             <button
               type="button"
               onClick={() => setActivePage('dashboard')}
-              className="hover:text-stone-950"
+              className="text-slate-300 hover:text-emerald-400 transition-colors"
             >
               {t.navDashboard}
             </button>
             <button
               type="button"
               onClick={() => handleOpenAuthModal('register')}
-              className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:underline"
+              className="inline-flex items-center gap-1.5 font-bold text-cyan-400 hover:text-cyan-300 transition-colors"
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>Register Account</span>
@@ -2078,7 +2115,7 @@ export default function App() {
         onSaveProfile={handleSaveProfile}
       />
 
-      {/* Secure Role-Based Authentication Modal (Login, Register, Admin Login) */}
+      {/* Secure Role-Based Authentication Modal (Login, Register) */}
       <AuthModal
         isOpen={isAuthModalOpen}
         initialTab={authModalTab}
@@ -2106,68 +2143,72 @@ const LiteraryWorkCard: React.FC<LiteraryWorkCardProps> = ({
   const t = UI_TRANSLATIONS[activeLanguage] || UI_TRANSLATIONS.en;
 
   return (
-    <article className="overscale-card rounded-xl bg-white border border-stone-200/90 overflow-hidden flex flex-col justify-between">
+    <article className="aurora-card rounded-2xl overflow-hidden flex flex-col justify-between group transition-all duration-300 hover:shadow-[0_0_35px_rgba(6,182,212,0.35)]">
       <div>
         <button
           type="button"
           onClick={() => onOpenPost(post)}
-          className="w-full text-left block group"
+          className="w-full text-left block"
         >
-          <img
-            src={post.coverUrl}
-            alt={post.title}
-            referrerPolicy="no-referrer"
-            className="w-full h-48 object-cover border-b border-stone-100"
-          />
-          <div className="p-5">
-            {/* Clean Unboxed Metadata with Typographic Separators */}
-            <div className="flex items-center gap-2 text-xs text-stone-500 mb-2">
-              <span>{formatSectionLabel(post.section, activeLanguage)}</span>
-              <span aria-hidden="true">·</span>
-              <span>{formatLanguageLabel(post.language)}</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono-num text-emerald-800">{post.aiScore}% AI</span>
+          <div className="relative overflow-hidden">
+            <img
+              src={post.coverUrl}
+              alt={post.title}
+              referrerPolicy="no-referrer"
+              className="w-full h-52 object-cover transition-transform duration-500 group-hover:scale-105 border-b border-slate-800"
+            />
+            <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-[#060913]/90 backdrop-blur-md border border-emerald-500/40 text-emerald-300 text-[11px] font-mono font-bold shadow-[0_0_12px_rgba(16,185,129,0.4)]">
+              {post.aiScore}% AI Authentic
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center gap-2 text-xs text-slate-400 mb-2.5">
+              <span className="text-cyan-400 font-bold uppercase tracking-wider text-[11px]">
+                {formatSectionLabel(post.section, activeLanguage)}
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-fuchsia-400 font-semibold">{formatLanguageLabel(post.language)}</span>
             </div>
 
-            <h3 className="text-xl font-display font-bold text-stone-900 group-hover:text-amber-900 transition-colors leading-snug">
+            <h3 className="text-xl font-display font-bold text-white group-hover:text-cyan-300 transition-colors leading-snug">
               {post.title}
             </h3>
 
             {post.subtitle && (
-              <p className="text-xs font-prose italic text-stone-600 mt-1.5 line-clamp-2">
+              <p className="text-xs font-prose italic text-slate-400 mt-2 line-clamp-2">
                 {post.subtitle}
               </p>
             )}
 
-            <p className="text-xs font-prose text-stone-600 mt-2.5 line-clamp-3 leading-relaxed">
+            <p className="text-xs font-prose text-slate-400 mt-3 line-clamp-3 leading-relaxed">
               {post.content}
             </p>
           </div>
         </button>
       </div>
 
-      <div className="px-5 py-3.5 bg-[#FBF9F5] border-t border-stone-200/80 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="px-6 py-4 bg-[#0a0f1d] border-t border-slate-800/80 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <img
             src={post.authorPhoto}
             alt={post.authorName}
             referrerPolicy="no-referrer"
-            className="w-7 h-7 rounded-full object-cover border border-stone-300 shrink-0"
+            className="w-8 h-8 rounded-full object-cover border-2 border-cyan-400/60 shadow-[0_0_10px_rgba(6,182,212,0.4)] shrink-0"
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold text-stone-900 truncate">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-white truncate">
                 {post.authorName}
               </span>
-              {post.authorVerified && <BlueTickBadge size={13} />}
+              {post.authorVerified && <BlueTickBadge size={14} />}
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-stone-500 font-mono-num">
-              <span className="inline-flex items-center gap-0.5">
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <span className="inline-flex items-center gap-1 text-cyan-400">
                 <Eye className="w-3 h-3" />
                 {post.viewsCount}
               </span>
-              <span>·</span>
-              <span className="inline-flex items-center gap-0.5">
+              <span className="text-slate-600">·</span>
+              <span className="inline-flex items-center gap-1 text-fuchsia-400">
                 <Heart className="w-3 h-3" />
                 {post.likesCount}
               </span>
@@ -2180,14 +2221,14 @@ const LiteraryWorkCard: React.FC<LiteraryWorkCardProps> = ({
             type="button"
             onClick={() => onOpenMessage(post.authorId, post.authorName, post.authorPhoto)}
             aria-label={`Message ${post.authorName}`}
-            className="p-1.5 rounded-lg text-stone-600 hover:text-stone-950 hover:bg-stone-200/60 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/30 transition-all"
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <MessageSquare className="w-4 h-4" />
           </button>
           <button
             type="button"
             onClick={() => onOpenPost(post)}
-            className="px-3 py-1.5 text-xs font-semibold text-stone-900 bg-[#F3EFE6] border border-stone-300 rounded-lg hover:bg-stone-200 transition-colors whitespace-nowrap"
+            className="px-3.5 py-1.5 text-xs font-bold text-cyan-200 bg-cyan-950/60 border border-cyan-500/40 rounded-xl hover:bg-cyan-900/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all whitespace-nowrap"
           >
             {t.readFullArticle}
           </button>
