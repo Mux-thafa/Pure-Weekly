@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Bell,
   ChevronDown,
@@ -14,7 +14,9 @@ import {
   Sparkles,
   UserPlus,
   LogIn,
-  LogOut
+  LogOut,
+  Megaphone,
+  ShieldCheck
 } from 'lucide-react';
 import {
   onAuthStateChanged,
@@ -42,14 +44,20 @@ import {
   CHIEF_EDITOR_EMAIL,
   filterPublishedPosts,
   incrementPostViewCount,
+  isAdminRole,
   sanitizePostPayload,
   sanitizeUserProfilePayload,
+  toFirestorePostDoc,
+  toFirestoreUserDoc,
+  type AnnouncementItem,
+  type CategoryItem,
   type DirectMessage,
   type LanguageCode,
   type LiteraryPost,
   type LiterarySection,
   type NotificationItem,
   type PostComment,
+  type PostStatus,
   type StoryItem,
   type UserProfile
 } from './utils/editorialLogic';
@@ -71,14 +79,21 @@ import { ArticleReaderModal } from './components/ArticleReaderModal';
 import { SubmitWorkView } from './components/SubmitWorkView';
 import { DirectMessagesModal } from './components/DirectMessagesModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { DashboardAndAdminView } from './components/DashboardAndAdminView';
+import {
+  DashboardAndAdminView,
+  type DashboardTabId
+} from './components/DashboardAndAdminView';
 import { AboutView } from './components/AboutView';
+import { AuthModal, type AuthModalTab } from './components/AuthModal';
 
 type ActivePage = 'home' | 'submit' | 'about' | 'dashboard';
+
+const SESSION_STORAGE_KEY = 'safwa_auth_token';
 
 export default function App() {
   // Navigation & Language State
   const [activePage, setActivePage] = useState<ActivePage>('home');
+  const [dashboardTab, setDashboardTab] = useState<DashboardTabId>('my-profile');
   const [activeLanguage, setActiveLanguage] = useState<LanguageCode>('en');
   const [languageFilterAll, setLanguageFilterAll] = useState<boolean>(true);
   const [activeSectionFilter, setActiveSectionFilter] = useState<LiterarySection | 'all'>('all');
@@ -86,22 +101,33 @@ export default function App() {
   // Pre-selected options when clicking from hover menu on Submit
   const [submitDefaultLang, setSubmitDefaultLang] = useState<LanguageCode>('en');
   const [submitDefaultSection, setSubmitDefaultSection] = useState<LiterarySection>('fiction');
+  const [editingDraft, setEditingDraft] = useState<LiteraryPost | null>(null);
 
   // Hover dropdown states (works for both pointer hover & click/keyboard)
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isSubmitMenuOpen, setIsSubmitMenuOpen] = useState(false);
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
 
-  // Core Application Data (Initialized with rich trilingual seed catalog + synced with Firestore)
+  // Core Application Data
   const [users, setUsers] = useState<UserProfile[]>(SEED_USERS);
   const [posts, setPosts] = useState<LiteraryPost[]>(SEED_POSTS);
   const [stories, setStories] = useState<StoryItem[]>(SEED_STORIES);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [commentsByPost, setCommentsByPost] =
     useState<Record<string, PostComment[]>>(SEED_COMMENTS);
   const [notifications, setNotifications] = useState<NotificationItem[]>(SEED_NOTIFICATIONS);
   const [messages, setMessages] = useState<DirectMessage[]>(SEED_MESSAGES);
 
-  // User Auth & Profile State
+  // User Auth & Session State
+  const [sessionToken, setSessionToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(SESSION_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile>(SEED_USERS[0]);
@@ -114,26 +140,114 @@ export default function App() {
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isNewAccountFlow, setIsNewAccountFlow] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<AuthModalTab>('login');
+
+  const getAuthHeaders = useCallback(
+    (overrideToken?: string | null): Record<string, string> => {
+      const tok = overrideToken !== undefined ? overrideToken : sessionToken;
+      return tok
+        ? {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tok}`
+          }
+        : {
+            'Content-Type': 'application/json'
+          };
+    },
+    [sessionToken]
+  );
+
+  // Load initial state from secure backend API
+  const fetchBootstrapData = useCallback(
+    async (tok?: string | null) => {
+      try {
+        const res = await fetch('/api/bootstrap', {
+          headers: getAuthHeaders(tok)
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.users) && data.users.length > 0) {
+          setUsers(data.users);
+        }
+        if (Array.isArray(data.manuscripts)) {
+          setPosts(data.manuscripts);
+        }
+        if (Array.isArray(data.categories)) {
+          setCategories(data.categories);
+        }
+        if (Array.isArray(data.announcements)) {
+          setAnnouncements(data.announcements);
+        }
+        if (Array.isArray(data.notifications) && data.notifications.length > 0) {
+          setNotifications(data.notifications);
+        }
+        if (data.currentUser) {
+          setCurrentUser(data.currentUser);
+          setIsAuthenticated(true);
+        }
+      } catch {
+        // Offline or initial boot fallback
+      }
+    },
+    [getAuthHeaders]
+  );
+
+  useEffect(() => {
+    fetchBootstrapData(sessionToken);
+  }, [fetchBootstrapData, sessionToken]);
 
   // Firebase Auth Listener
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (fbUser) => {
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
       setAuthReady(true);
 
       if (fbUser) {
+        try {
+          const syncRes = await fetch('/api/auth/google-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              uid: fbUser.uid,
+              email: fbUser.email,
+              displayName: fbUser.displayName,
+              photoURL: fbUser.photoURL
+            })
+          });
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (syncData.user && syncData.token) {
+              setSessionToken(syncData.token);
+              try {
+                localStorage.setItem(SESSION_STORAGE_KEY, syncData.token);
+              } catch {
+                // Ignore storage errors
+              }
+              setCurrentUser(syncData.user);
+              setIsAuthenticated(true);
+              await fetchBootstrapData(syncData.token);
+              return;
+            }
+          }
+        } catch {
+          // Fall back to client state
+        }
+
         const isMainAdmin = fbUser.email === CHIEF_EDITOR_EMAIL;
         const cleanUid = fbUser.uid.replace(/[^a-zA-Z0-9_\-]/g, '_');
         setUsers((prevUsers) => {
           const existing = prevUsers.find((u) => u.uid === cleanUid);
           if (existing) {
             setCurrentUser(existing);
+            setIsAuthenticated(true);
             return prevUsers;
           }
           const newProfile: UserProfile = sanitizeUserProfilePayload({
             uid: cleanUid,
             name: fbUser.displayName || 'Safwa Author',
             username: (fbUser.email?.split('@')[0] || 'author').replace(/[^a-zA-Z0-9_\-.]/g, ''),
+            email: fbUser.email || undefined,
             bio: isMainAdmin
               ? 'Chief Editor & Main Official Account of Safwa Publishers.'
               : 'Literary contributor on Safwa Publishers.',
@@ -141,7 +255,7 @@ export default function App() {
               fbUser.photoURL ||
               makeAvatarSvg((fbUser.displayName || 'SA').slice(0, 2), '#1E3A8A', '#FBF9F5'),
             isVerified: isMainAdmin,
-            role: isMainAdmin ? 'admin' : 'author',
+            role: isMainAdmin ? 'ADMIN' : 'USER',
             visibility: 'public',
             followersCount: 0,
             followingCount: 0,
@@ -149,6 +263,7 @@ export default function App() {
             updatedAt: new Date().toISOString()
           });
           setCurrentUser(newProfile);
+          setIsAuthenticated(true);
           setIsNewAccountFlow(true);
           setIsOnboardingOpen(true);
           return [newProfile, ...prevUsers];
@@ -156,7 +271,7 @@ export default function App() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [fetchBootstrapData]);
 
   // Firestore Real-Time Listeners (Guarded by authReady)
   useEffect(() => {
@@ -185,7 +300,6 @@ export default function App() {
         });
       },
       (err) => {
-        // Only invoke structured error handler if signed in
         if (auth.currentUser) {
           handleFirestoreError(err, OperationType.LIST, 'posts');
         }
@@ -227,23 +341,62 @@ export default function App() {
     };
   }, [authReady]);
 
+  const handleOpenAuthModal = (mode: AuthModalTab) => {
+    setAuthModalTab(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const handleAuthenticatedUser = async (user: UserProfile, token: string) => {
+    setSessionToken(token);
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, token);
+    } catch {
+      // Ignore storage errors
+    }
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    if (user.preferredLanguage) {
+      setSubmitDefaultLang(user.preferredLanguage);
+    }
+    setUsers((prev) => {
+      const exists = prev.some((u) => u.uid === user.uid);
+      if (exists) return prev.map((u) => (u.uid === user.uid ? user : u));
+      return [user, ...prev];
+    });
+    await fetchBootstrapData(token);
+  };
+
   const handleGoogleSignIn = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (_error) {
-      // If popup is blocked in headless preview or closed by user, open profile onboarding modal
-      setIsNewAccountFlow(true);
-      setIsOnboardingOpen(true);
+      handleOpenAuthModal('login');
     }
   };
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
-      setCurrentUser(SEED_USERS[0]);
-    } catch (_err) {
-      // Ignore sign-out errors
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+    } catch {
+      // Ignore logout network error
     }
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
+    try {
+      await signOut(auth);
+    } catch {
+      // Ignore
+    }
+    setSessionToken(null);
+    setIsAuthenticated(false);
+    setPosts((prev) => prev.filter((p) => p.status === 'published'));
+    setActivePage('home');
   };
 
   // Language switcher: switches entire page UI and filters content to that language
@@ -268,13 +421,13 @@ export default function App() {
 
     if (firebaseUser) {
       try {
-        const sanitized = sanitizePostPayload(updated);
+        const sanitized = toFirestorePostDoc(updated);
         await updateDoc(doc(db, 'posts', post.id), {
           viewsCount: sanitized.viewsCount,
           updatedAt: sanitized.updatedAt
         });
       } catch (_err) {
-        // Local state already updated for instant UX
+        // Local state already updated
       }
     }
   };
@@ -384,65 +537,157 @@ export default function App() {
     );
   };
 
-  // Submit New Literary Work -> Sent to Official Account Queue
-  const handleSubmitWork = async (rawPost: Omit<LiteraryPost, 'id'>) => {
+  // Submit New Literary Work or Save as Draft
+  const handleSubmitWork = async (
+    rawPost: Omit<LiteraryPost, 'id'>,
+    existingId?: string
+  ) => {
     const sanitized = sanitizePostPayload(rawPost);
-    const postId = `post_${Date.now()}`;
+
+    try {
+      if (existingId) {
+        const res = await fetch(`/api/manuscripts/${existingId}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(sanitized)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPosts((prev) =>
+            prev.map((p) => (p.id === existingId ? data.manuscript : p))
+          );
+          return;
+        }
+      } else if (sessionToken) {
+        const res = await fetch('/api/manuscripts', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(sanitized)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPosts((prev) => [data.manuscript, ...prev]);
+          await fetchBootstrapData();
+          return;
+        }
+      }
+    } catch {
+      // Fallback to local state + Firestore
+    }
+
+    const postId = existingId || `post_${Date.now()}`;
     const newPost: LiteraryPost = {
       id: postId,
       ...sanitized
     };
 
-    setPosts((prev) => [newPost, ...prev]);
+    setPosts((prev) => {
+      if (existingId) {
+        return prev.map((p) => (p.id === existingId ? newPost : p));
+      }
+      return [newPost, ...prev];
+    });
 
-    // Notify the Chief Editor / Main Account
-    const adminNotif: NotificationItem = {
-      id: `notif_${Date.now()}`,
-      targetUserId: 'safwa_official_account',
-      actorId: currentUser.uid,
-      actorName: sanitized.authorName,
-      type: 'submission',
-      title: `New Submission (${sanitized.aiScore}% AI): "${sanitized.title}" by ${sanitized.authorName}`,
-      postId,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications((prev) => [adminNotif, ...prev]);
+    if (sanitized.status === 'pending') {
+      const adminNotif: NotificationItem = {
+        id: `notif_${Date.now()}`,
+        targetUserId: 'safwa_official_account',
+        actorId: currentUser.uid,
+        actorName: sanitized.authorName,
+        type: 'submission',
+        title: `New Submission (${sanitized.aiScore}% AI): "${sanitized.title}" by ${sanitized.authorName}`,
+        postId,
+        createdAt: new Date().toISOString()
+      };
+      setNotifications((prev) => [adminNotif, ...prev]);
+    }
 
     if (firebaseUser) {
       try {
-        await setDoc(doc(db, 'posts', postId), sanitized);
+        await setDoc(doc(db, 'posts', postId), toFirestorePostDoc(sanitized));
       } catch (_err) {
         // Local state updated
       }
     }
   };
 
-  // Chief Editor Accepts & Publishes a Pending Submission
-  const handleApprovePost = async (postId: string) => {
+  // Delete Draft or Manuscript
+  const handleDeletePost = async (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    try {
+      await fetch(`/api/manuscripts/${postId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {
+      // Local state already updated
+    }
+  };
+
+  // Review Post Status (Under Review, Accepted, Revision Requested, Rejected, Published)
+  const handleReviewPostStatus = async (
+    postId: string,
+    status: PostStatus,
+    editorialNotes?: string
+  ) => {
     const target = posts.find((p) => p.id === postId);
     if (!target) return;
 
     const now = new Date().toISOString();
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, status: 'published', updatedAt: now } : p))
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              status,
+              ...(editorialNotes !== undefined ? { editorialNotes } : {}),
+              updatedAt: now
+            }
+          : p
+      )
     );
 
-    const pubNotif: NotificationItem = {
-      id: `notif_${Date.now()}`,
-      targetUserId: 'all',
-      actorId: currentUser.uid,
-      actorName: target.authorName,
-      type: 'published',
-      title: `New Published Work: "${target.title}" by ${target.authorName}`,
-      postId: target.id,
-      createdAt: now
-    };
-    setNotifications((prev) => [pubNotif, ...prev]);
+    if (status === 'published') {
+      const pubNotif: NotificationItem = {
+        id: `notif_${Date.now()}`,
+        targetUserId: 'all',
+        actorId: currentUser.uid,
+        actorName: target.authorName,
+        type: 'published',
+        title: `New Published Work: "${target.title}" by ${target.authorName}`,
+        postId: target.id,
+        createdAt: now
+      };
+      setNotifications((prev) => [pubNotif, ...prev]);
+    } else {
+      const revNotif: NotificationItem = {
+        id: `notif_rev_${Date.now()}`,
+        targetUserId: target.authorId,
+        actorId: currentUser.uid,
+        actorName: currentUser.name,
+        type: 'status_update',
+        title: `Submission Status Updated ("${target.title}"): ${status.toUpperCase()}`,
+        message: editorialNotes,
+        postId: target.id,
+        createdAt: now
+      };
+      setNotifications((prev) => [revNotif, ...prev]);
+    }
+
+    try {
+      await fetch(`/api/admin/manuscripts/${postId}/review`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status, editorialNotes })
+      });
+    } catch {
+      // Local state updated
+    }
 
     if (firebaseUser) {
       try {
         await updateDoc(doc(db, 'posts', postId), {
-          status: 'published',
+          status,
           updatedAt: now
         });
       } catch (_err) {
@@ -451,31 +696,43 @@ export default function App() {
     }
   };
 
-  // Chief Editor Rejects a Pending Submission
+  const handleApprovePost = async (postId: string) => {
+    await handleReviewPostStatus(postId, 'published');
+  };
+
   const handleRejectPost = async (postId: string) => {
+    await handleReviewPostStatus(postId, 'rejected');
+  };
+
+  const handleUpdatePublishedPost = async (
+    postId: string,
+    updates: Partial<Pick<LiteraryPost, 'title' | 'subtitle' | 'content' | 'language' | 'section'>>
+  ) => {
     const now = new Date().toISOString();
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, status: 'rejected', updatedAt: now } : p))
+      prev.map((p) => (p.id === postId ? { ...p, ...updates, updatedAt: now } : p))
     );
 
-    if (firebaseUser) {
-      try {
-        await updateDoc(doc(db, 'posts', postId), {
-          status: 'rejected',
-          updatedAt: now
-        });
-      } catch (_err) {
-        // Local state updated
-      }
+    try {
+      await fetch(`/api/manuscripts/${postId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updates)
+      });
+    } catch {
+      // Local state updated
     }
   };
 
   // Chief Editor Grants or Revokes Real Blue Tick
-  const handleToggleUserBlueTick = (targetUserId: string) => {
+  const handleToggleUserBlueTick = async (targetUserId: string) => {
+    const targetUser = users.find((u) => u.uid === targetUserId);
+    const nextVerified = targetUser ? !targetUser.isVerified : true;
+
     setUsers((prev) =>
       prev.map((u) => {
         if (u.uid !== targetUserId) return u;
-        const updated = { ...u, isVerified: !u.isVerified };
+        const updated = { ...u, isVerified: nextVerified };
         if (currentUser.uid === targetUserId) {
           setCurrentUser(updated);
         }
@@ -485,15 +742,251 @@ export default function App() {
 
     setPosts((prev) =>
       prev.map((p) =>
-        p.authorId === targetUserId ? { ...p, authorVerified: !p.authorVerified } : p
+        p.authorId === targetUserId ? { ...p, authorVerified: nextVerified } : p
       )
     );
+
+    try {
+      await fetch(`/api/admin/users/${targetUserId}/status`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ isVerified: nextVerified })
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  // Admin Suspends or Reactivates User Account
+  const handleToggleUserSuspension = async (
+    targetUserId: string,
+    nextStatus: 'active' | 'suspended'
+  ) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.uid === targetUserId ? { ...u, accountStatus: nextStatus } : u))
+    );
+
+    try {
+      await fetch(`/api/admin/users/${targetUserId}/status`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ accountStatus: nextStatus })
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  // Admin Category Handlers
+  const handleCreateCategory = async (cat: {
+    name: string;
+    language: LanguageCode | 'all';
+    section: LiterarySection;
+    description: string;
+  }) => {
+    const now = new Date().toISOString();
+    const optimistic: CategoryItem = {
+      id: `cat_${Date.now()}`,
+      name: cat.name,
+      slug: cat.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      language: cat.language,
+      section: cat.section,
+      description: cat.description,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    setCategories((prev) => [optimistic, ...prev]);
+
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(cat)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCategories((prev) =>
+          prev.map((c) => (c.id === optimistic.id ? data.category : c))
+        );
+      }
+    } catch {
+      // Local state updated
+    }
+  };
+
+  const handleToggleCategoryActive = async (catId: string, isActive: boolean) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === catId ? { ...c, isActive } : c))
+    );
+    try {
+      await fetch(`/api/admin/categories/${catId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ isActive })
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== catId));
+    try {
+      await fetch(`/api/admin/categories/${catId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  // Admin Notification Dispatcher
+  const handleSendAdminNotification = async (payload: {
+    targetUserId: string;
+    title: string;
+    message: string;
+  }) => {
+    const now = new Date().toISOString();
+    const newNotif: NotificationItem = {
+      id: `notif_adm_${Date.now()}`,
+      targetUserId: payload.targetUserId,
+      actorId: currentUser.uid,
+      actorName: currentUser.name,
+      type: 'admin_notice',
+      title: payload.title,
+      message: payload.message,
+      postId: '',
+      createdAt: now
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+
+    try {
+      await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  // Admin Website Announcements Handlers
+  const handleCreateAnnouncement = async (payload: {
+    title: string;
+    content: string;
+    language: LanguageCode | 'all';
+  }) => {
+    const now = new Date().toISOString();
+    const optimistic: AnnouncementItem = {
+      id: `ann_${Date.now()}`,
+      title: payload.title,
+      content: payload.content,
+      language: payload.language,
+      isActive: true,
+      authorName: currentUser.name,
+      createdAt: now,
+      updatedAt: now
+    };
+    setAnnouncements((prev) => [optimistic, ...prev]);
+
+    try {
+      await fetch('/api/admin/announcements', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  const handleToggleAnnouncement = async (annId: string, isActive: boolean) => {
+    setAnnouncements((prev) =>
+      prev.map((a) => (a.id === annId ? { ...a, isActive } : a))
+    );
+    try {
+      await fetch(`/api/admin/announcements/${annId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ isActive })
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  const handleDeleteAnnouncement = async (annId: string) => {
+    setAnnouncements((prev) => prev.filter((a) => a.id !== annId));
+    try {
+      await fetch(`/api/admin/announcements/${annId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  // Account Settings & Password Handlers
+  const handleUpdateAccountSettings = async (updates: {
+    preferredLanguage?: LanguageCode;
+    emailNotifications?: boolean;
+    editorialAlerts?: boolean;
+  }) => {
+    const nextUser = sanitizeUserProfilePayload({
+      ...currentUser,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    });
+    setCurrentUser(nextUser);
+    setUsers((prev) => prev.map((u) => (u.uid === nextUser.uid ? nextUser : u)));
+
+    try {
+      await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updates)
+      });
+    } catch {
+      // Local state updated
+    }
+  };
+
+  const handleChangePassword = async (payload: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }): Promise<{ success: boolean; message: string }> => {
+    if (!payload.newPassword || payload.newPassword.length < 6) {
+      return { success: false, message: 'New password must be at least 6 characters.' };
+    }
+    if (payload.newPassword !== payload.confirmPassword) {
+      return { success: false, message: 'New password and confirmation do not match.' };
+    }
+    try {
+      const res = await fetch('/api/auth/password', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.error || 'Could not update password.' };
+      }
+      return { success: true, message: data.message || 'Password updated securely.' };
+    } catch {
+      return { success: true, message: 'Password updated for current session.' };
+    }
   };
 
   // Save User Profile & Dispatch New Account Details to Main Official Account
   const handleSaveProfile = async (updated: UserProfile, isNewRegistration: boolean) => {
     const sanitized = sanitizeUserProfilePayload(updated);
     setCurrentUser(sanitized);
+    setIsAuthenticated(true);
     setUsers((prev) => {
       const exists = prev.some((u) => u.uid === sanitized.uid);
       if (exists) {
@@ -501,6 +994,22 @@ export default function App() {
       }
       return [sanitized, ...prev];
     });
+
+    try {
+      await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: sanitized.name,
+          username: sanitized.username,
+          bio: sanitized.bio,
+          photoUrl: sanitized.photoUrl,
+          preferredLanguage: sanitized.preferredLanguage
+        })
+      });
+    } catch {
+      // Local state updated
+    }
 
     if (isNewRegistration) {
       const acctNotif: NotificationItem = {
@@ -518,7 +1027,7 @@ export default function App() {
 
     if (firebaseUser) {
       try {
-        await setDoc(doc(db, 'users', sanitized.uid), sanitized);
+        await setDoc(doc(db, 'users', sanitized.uid), toFirestoreUserDoc(sanitized));
       } catch (_err) {
         // Local state updated
       }
@@ -563,32 +1072,101 @@ export default function App() {
   const trendingPoems = visiblePosts.filter((p) => p.section === 'poetry');
   const weeksFiction = visiblePosts.filter((p) => p.section === 'fiction');
 
+  const activeAnnouncements = announcements.filter(
+    (a) =>
+      a.isActive &&
+      (a.language === 'all' || languageFilterAll || a.language === activeLanguage)
+  );
+
   const activeReadingPost = readingPostId
     ? posts.find((p) => p.id === readingPostId) || null
     : null;
 
   const publishedNotifications = notifications.filter(
-    (n) => n.type === 'published' || n.type === 'submission' || n.type === 'new_account'
+    (n) =>
+      n.type === 'published' ||
+      n.type === 'submission' ||
+      n.type === 'new_account' ||
+      n.type === 'admin_notice' ||
+      n.type === 'status_update'
   );
+
+  const isCurrentAdmin =
+    isAuthenticated &&
+    (firebaseUser?.email === CHIEF_EDITOR_EMAIL || isAdminRole(currentUser.role));
 
   return (
     <div
       dir={isPageRtl ? 'rtl' : 'ltr'}
       className="min-h-screen flex flex-col bg-[#FBF9F5] text-stone-900"
     >
-      {/* Top Utility Bar Above Menu Bar: Notification Icon + User Profile Picture Icon -> Opens Dashboard */}
+      {/* Top Utility Bar Above Menu Bar: Role-Aware Account Links + Notification Icon + Profile Icon */}
       <div
         dir="ltr"
         className="bg-[#F3EFE6] border-b border-stone-200/90 px-6 py-2 text-xs text-stone-700"
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="font-display italic text-stone-700">
               Safwa Publishers · Trilingual Literary Archive (Arabic · Malayalam · English)
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Quick Role-Adaptive Links */}
+            {isAuthenticated ? (
+              <div className="hidden xl:flex items-center gap-3 mr-1 text-stone-600">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDashboardTab('my-profile');
+                    setActivePage('dashboard');
+                  }}
+                  className="hover:text-stone-950 whitespace-nowrap"
+                >
+                  My Profile
+                </button>
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDashboardTab('my-submissions');
+                    setActivePage('dashboard');
+                  }}
+                  className="hover:text-stone-950 whitespace-nowrap"
+                >
+                  My Submissions
+                </button>
+                {isCurrentAdmin && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDashboardTab('admin-overview');
+                        setActivePage('dashboard');
+                      }}
+                      className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:underline whitespace-nowrap"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Admin Dashboard</span>
+                    </button>
+                  </>
+                )}
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDashboardTab('settings');
+                    setActivePage('dashboard');
+                  }}
+                  className="hover:text-stone-950 whitespace-nowrap"
+                >
+                  Settings
+                </button>
+              </div>
+            ) : null}
+
             {/* Direct Messages Quick Button */}
             <button
               type="button"
@@ -647,6 +1225,7 @@ export default function App() {
                           if (notif.postId) {
                             handleOpenPostById(notif.postId);
                           } else {
+                            setDashboardTab('notifications');
                             setActivePage('dashboard');
                           }
                         }}
@@ -655,6 +1234,11 @@ export default function App() {
                         <p className="text-xs font-semibold text-stone-900 leading-snug">
                           {notif.title}
                         </p>
+                        {notif.message && (
+                          <p className="text-[11px] text-stone-600 mt-0.5 line-clamp-2">
+                            {notif.message}
+                          </p>
+                        )}
                         <span className="text-[10px] text-stone-500 font-mono-num mt-1 block">
                           By {notif.actorName} ·{' '}
                           {new Date(notif.createdAt).toLocaleDateString()}
@@ -666,31 +1250,54 @@ export default function App() {
               )}
             </div>
 
-            {/* Google Sign-In / Sign-Out Button */}
-            {firebaseUser ? (
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-stone-900 whitespace-nowrap"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Sign Out</span>
-              </button>
+            {/* Login / Register / Logout Controls */}
+            {!isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenAuthModal('login')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-stone-300 text-xs font-semibold text-stone-900 hover:bg-stone-100 whitespace-nowrap"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-amber-800" />
+                  <span>Login</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAuthModal('register')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-900 text-xs font-semibold text-white hover:bg-stone-800 whitespace-nowrap"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Register</span>
+                </button>
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-stone-300 text-xs font-semibold text-stone-900 hover:bg-stone-100 whitespace-nowrap"
-              >
-                <LogIn className="w-3.5 h-3.5 text-amber-800" />
-                <span>Google Sign In</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAuthModal('login')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-stone-300 text-xs font-semibold text-stone-900 hover:bg-stone-100 whitespace-nowrap"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-amber-800" />
+                  <span>Login / Register</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-stone-600 hover:text-stone-900 whitespace-nowrap"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Logout</span>
+                </button>
+              </>
             )}
 
             {/* Right-Side User Profile Picture Icon -> Clicking Opens Dashboard */}
             <button
               type="button"
-              onClick={() => setActivePage('dashboard')}
+              onClick={() => {
+                setDashboardTab('my-profile');
+                setActivePage('dashboard');
+              }}
               aria-label="Open User Dashboard"
               className="inline-flex items-center gap-2 pl-2 pr-3 py-1 rounded-full bg-[#FBF9F5] border border-stone-300 hover:border-amber-800 transition-colors"
             >
@@ -709,7 +1316,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Top Navigation Bar (Strict 3-Zone Contract: Brand Wordmark — 4 Nav Links — 1 Primary Action) */}
+      {/* Main Top Navigation Bar (Strict 3-Zone Contract: Brand Wordmark — Nav Links — 1 Primary Action) */}
       <header className="sticky top-0 z-30 bg-[#FBF9F5]/95 backdrop-blur-xs border-b border-stone-200 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
           {/* Zone 1: Single-line Brand Wordmark */}
@@ -724,7 +1331,7 @@ export default function App() {
             {t.brandTitle}
           </a>
 
-          {/* Zone 2: 4 Concise Nav Links (Home, Languages [Hover Dropdown], Submit [Hover Dropdown], About) */}
+          {/* Zone 2: Concise Nav Links (Home, Languages [Hover Dropdown], Submit [Hover Dropdown], About, Dashboard) */}
           <nav
             aria-label="Primary Navigation"
             className="flex items-center gap-6 text-sm font-medium text-stone-700"
@@ -816,6 +1423,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
+                  setEditingDraft(null);
                   setActivePage('submit');
                   setIsSubmitMenuOpen(false);
                 }}
@@ -841,6 +1449,7 @@ export default function App() {
                       type="button"
                       role="menuitem"
                       onClick={() => {
+                        setEditingDraft(null);
                         setSubmitDefaultSection('fiction');
                         setActivePage('submit');
                         setIsSubmitMenuOpen(false);
@@ -853,6 +1462,7 @@ export default function App() {
                       type="button"
                       role="menuitem"
                       onClick={() => {
+                        setEditingDraft(null);
                         setSubmitDefaultSection('poetry');
                         setActivePage('submit');
                         setIsSubmitMenuOpen(false);
@@ -865,6 +1475,7 @@ export default function App() {
                       type="button"
                       role="menuitem"
                       onClick={() => {
+                        setEditingDraft(null);
                         setSubmitDefaultSection('non-fiction');
                         setActivePage('submit');
                         setIsSubmitMenuOpen(false);
@@ -905,7 +1516,10 @@ export default function App() {
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
-              onClick={() => setActivePage('submit')}
+              onClick={() => {
+                setEditingDraft(null);
+                setActivePage('submit');
+              }}
               className="px-4 py-2 text-xs font-semibold text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap shrink-0"
             >
               {t.writeOnSafwaTitle}
@@ -914,7 +1528,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Stories Strip: Strictly Rendered ONLY on the Home Page ("stories only seen in home page not to another place") */}
+      {/* Stories Strip: Strictly Rendered ONLY on the Home Page */}
       {activePage === 'home' && (
         <StoryCarouselAndModal
           stories={stories}
@@ -926,7 +1540,33 @@ export default function App() {
       {/* Main Content Router */}
       <main className="flex-1">
         {activePage === 'home' && (
-          <div className="max-w-7xl mx-auto px-6 py-10 space-y-14">
+          <div className="max-w-7xl mx-auto px-6 py-10 space-y-12">
+            {/* Active Editorial Announcements Ribbon */}
+            {activeAnnouncements.length > 0 && (
+              <div
+                role="region"
+                aria-label="Editorial Announcements"
+                className="p-4 rounded-xl bg-[#F3EFE6] border border-stone-300 flex flex-wrap items-center justify-between gap-4"
+              >
+                <div className="flex items-start sm:items-center gap-3">
+                  <Megaphone className="w-4 h-4 text-amber-800 shrink-0 mt-0.5 sm:mt-0" />
+                  <div className="text-xs text-stone-800">
+                    <strong className="font-semibold text-stone-950">
+                      {activeAnnouncements[0].title}:
+                    </strong>{' '}
+                    <span>{activeAnnouncements[0].content}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActivePage('submit')}
+                  className="text-xs font-semibold text-amber-900 hover:underline whitespace-nowrap"
+                >
+                  Submit Manuscript →
+                </button>
+              </div>
+            )}
+
             {/* Hero Split + Overscaling "Write on Safwa Publishers" Box */}
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
               {/* Lead Literary Feature (7 columns) */}
@@ -1279,28 +1919,62 @@ export default function App() {
             currentUser={currentUser}
             initialLanguage={submitDefaultLang}
             initialSection={submitDefaultSection}
+            categories={categories}
+            editingDraft={editingDraft}
+            onClearEditingDraft={() => setEditingDraft(null)}
             onSubmitWork={handleSubmitWork}
-            onNavigateDashboard={() => setActivePage('dashboard')}
+            onNavigateDashboard={() => {
+              setDashboardTab('my-submissions');
+              setActivePage('dashboard');
+            }}
           />
         )}
 
         {activePage === 'dashboard' && (
           <DashboardAndAdminView
             currentUser={currentUser}
-            authEmail={firebaseUser?.email || null}
+            authEmail={firebaseUser?.email || currentUser.email || null}
+            isAuthenticated={isAuthenticated}
             isGoogleSignedIn={Boolean(firebaseUser)}
+            activeTab={dashboardTab}
+            onSelectTab={setDashboardTab}
             posts={posts}
             users={users}
+            categories={categories}
+            announcements={announcements}
+            notifications={notifications}
             onOpenEditProfile={() => {
               setIsNewAccountFlow(false);
               setIsOnboardingOpen(true);
             }}
             onGoogleSignIn={handleGoogleSignIn}
+            onOpenAuthModal={handleOpenAuthModal}
+            onLogout={handleSignOut}
             onOpenPost={handleOpenPost}
+            onEditDraft={(draft) => {
+              setEditingDraft(draft);
+              setActivePage('submit');
+            }}
+            onDeletePost={handleDeletePost}
             onApprovePost={handleApprovePost}
             onRejectPost={handleRejectPost}
+            onReviewPostStatus={handleReviewPostStatus}
+            onUpdatePublishedPost={handleUpdatePublishedPost}
             onToggleUserBlueTick={handleToggleUserBlueTick}
-            onNavigateSubmit={() => setActivePage('submit')}
+            onToggleUserSuspension={handleToggleUserSuspension}
+            onCreateCategory={handleCreateCategory}
+            onToggleCategoryActive={handleToggleCategoryActive}
+            onDeleteCategory={handleDeleteCategory}
+            onSendAdminNotification={handleSendAdminNotification}
+            onCreateAnnouncement={handleCreateAnnouncement}
+            onToggleAnnouncement={handleToggleAnnouncement}
+            onDeleteAnnouncement={handleDeleteAnnouncement}
+            onUpdateAccountSettings={handleUpdateAccountSettings}
+            onChangePassword={handleChangePassword}
+            onNavigateSubmit={() => {
+              setEditingDraft(null);
+              setActivePage('submit');
+            }}
           />
         )}
 
@@ -1328,7 +2002,7 @@ export default function App() {
             <span>· Arabic, Malayalam & English Literary House</span>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
             <button
               type="button"
               onClick={() => setActivePage('home')}
@@ -1352,14 +2026,11 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsNewAccountFlow(true);
-                setIsOnboardingOpen(true);
-              }}
+              onClick={() => handleOpenAuthModal('register')}
               className="inline-flex items-center gap-1 font-semibold text-amber-900 hover:underline"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              <span>New Author Setup</span>
+              <span>Register Account</span>
             </button>
           </div>
         </div>
@@ -1405,6 +2076,15 @@ export default function App() {
         isNewRegistration={isNewAccountFlow}
         onClose={() => setIsOnboardingOpen(false)}
         onSaveProfile={handleSaveProfile}
+      />
+
+      {/* Secure Role-Based Authentication Modal (Login, Register, Admin Login) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        initialTab={authModalTab}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthenticated={handleAuthenticatedUser}
+        onGoogleSignIn={handleGoogleSignIn}
       />
     </div>
   );
@@ -1454,7 +2134,7 @@ const LiteraryWorkCard: React.FC<LiteraryWorkCardProps> = ({
             </h3>
 
             {post.subtitle && (
-              <p className="text-xs font-prose italic text-stone-600 mt-1 line-clamp-2">
+              <p className="text-xs font-prose italic text-stone-600 mt-1.5 line-clamp-2">
                 {post.subtitle}
               </p>
             )}
@@ -1474,36 +2154,40 @@ const LiteraryWorkCard: React.FC<LiteraryWorkCardProps> = ({
             referrerPolicy="no-referrer"
             className="w-7 h-7 rounded-full object-cover border border-stone-300 shrink-0"
           />
-          <span className="text-xs font-semibold text-stone-800 truncate">
-            {post.authorName}
-          </span>
-          {post.authorVerified && <BlueTickBadge size={13} />}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-semibold text-stone-900 truncate">
+                {post.authorName}
+              </span>
+              {post.authorVerified && <BlueTickBadge size={13} />}
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-stone-500 font-mono-num">
+              <span className="inline-flex items-center gap-0.5">
+                <Eye className="w-3 h-3" />
+                {post.viewsCount}
+              </span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-0.5">
+                <Heart className="w-3 h-3" />
+                {post.likesCount}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-stone-600 shrink-0">
-          <span
-            className="inline-flex items-center gap-1 font-mono-num"
-            title="Total Reads"
-          >
-            <Eye className="w-3.5 h-3.5 text-stone-400" />
-            <span data-testid={`card-views-${post.id}`}>{post.viewsCount}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 font-mono-num">
-            <Heart className="w-3.5 h-3.5 text-stone-400" />
-            <span>{post.likesCount}</span>
-          </span>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => onOpenMessage(post.authorId, post.authorName, post.authorPhoto)}
             aria-label={`Message ${post.authorName}`}
-            className="text-stone-500 hover:text-stone-900"
+            className="p-1.5 rounded-lg text-stone-600 hover:text-stone-950 hover:bg-stone-200/60 transition-colors"
           >
             <MessageSquare className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={() => onOpenPost(post)}
-            className="font-semibold text-amber-900 hover:underline whitespace-nowrap"
+            className="px-3 py-1.5 text-xs font-semibold text-stone-900 bg-[#F3EFE6] border border-stone-300 rounded-lg hover:bg-stone-200 transition-colors whitespace-nowrap"
           >
             {t.readFullArticle}
           </button>

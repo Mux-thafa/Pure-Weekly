@@ -1,19 +1,41 @@
 export type LanguageCode = 'en' | 'ar' | 'ml';
 export type LiterarySection = 'fiction' | 'poetry' | 'non-fiction';
-export type PostStatus = 'pending' | 'published' | 'rejected';
+export type PostStatus =
+  | 'draft'
+  | 'pending'
+  | 'under_review'
+  | 'accepted'
+  | 'revision_requested'
+  | 'rejected'
+  | 'published';
+
+export type AccountRole = 'USER' | 'ADMIN' | 'reader' | 'author' | 'admin';
+export type AccountStatus = 'active' | 'suspended';
 
 export interface UserProfile {
   uid: string;
   name: string;
   username: string;
+  email?: string;
+  preferredLanguage?: LanguageCode;
   bio: string;
   photoUrl: string;
   isVerified: boolean;
-  role: 'reader' | 'author' | 'admin';
+  role: AccountRole;
+  accountStatus?: AccountStatus;
   visibility: 'public';
   followersCount: number;
   followingCount: number;
+  emailNotifications?: boolean;
+  editorialAlerts?: boolean;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoleRecord {
+  userId: string;
+  role: 'USER' | 'ADMIN';
+  assignedBy: string;
   updatedAt: string;
 }
 
@@ -26,6 +48,7 @@ export interface LiteraryPost {
   authorVerified: boolean;
   language: LanguageCode;
   section: LiterarySection;
+  categoryId?: string;
   title: string;
   subtitle: string;
   content: string;
@@ -33,9 +56,46 @@ export interface LiteraryPost {
   aiScore: number;
   aiVerdict: string;
   status: PostStatus;
+  editorialNotes?: string;
   viewsCount: number;
   likesCount: number;
   commentsCount: number;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicationRecord {
+  id: string;
+  manuscriptId: string;
+  authorId: string;
+  authorName: string;
+  language: LanguageCode;
+  section: LiterarySection;
+  title: string;
+  publishedBy: string;
+  publishedAt: string;
+}
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  slug: string;
+  language: LanguageCode | 'all';
+  section: LiterarySection;
+  description: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnouncementItem {
+  id: string;
+  title: string;
+  content: string;
+  language: LanguageCode | 'all';
+  isActive: boolean;
+  authorName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,9 +146,17 @@ export interface NotificationItem {
   targetUserId: string;
   actorId: string;
   actorName: string;
-  type: 'published' | 'submission' | 'verified' | 'new_account';
+  type:
+    | 'published'
+    | 'submission'
+    | 'verified'
+    | 'new_account'
+    | 'admin_notice'
+    | 'status_update';
   title: string;
+  message?: string;
   postId: string;
+  isRead?: boolean;
   createdAt: string;
 }
 
@@ -105,8 +173,62 @@ export interface AuthorStats {
   publishedWorksCount: number;
 }
 
+export interface AdminOverviewStats {
+  totalUsers: number;
+  activeUsers: number;
+  suspendedUsers: number;
+  totalSubmissions: number;
+  draftCount: number;
+  pendingCount: number;
+  underReviewCount: number;
+  acceptedCount: number;
+  revisionRequestedCount: number;
+  rejectedCount: number;
+  publishedCount: number;
+}
+
 export const CHIEF_EDITOR_EMAIL = 'mohammedmusthafac3@gmail.com';
 export const OFFICIAL_SAFWA_UID = 'safwa_official_account';
+
+export function isAdminRole(role?: string | null): boolean {
+  if (!role) return false;
+  return role.toUpperCase() === 'ADMIN';
+}
+
+export function normalizeRole(role?: string | null): 'USER' | 'ADMIN' {
+  return isAdminRole(role) ? 'ADMIN' : 'USER';
+}
+
+export function formatSubmissionStatusLabel(status: PostStatus): string {
+  switch (status) {
+    case 'draft':
+      return 'Draft';
+    case 'pending':
+      return 'Pending';
+    case 'under_review':
+      return 'Under Review';
+    case 'accepted':
+      return 'Accepted';
+    case 'revision_requested':
+      return 'Revision Requested';
+    case 'rejected':
+      return 'Rejected';
+    case 'published':
+      return 'Published';
+    default:
+      return 'Pending';
+  }
+}
+
+export function canUserAccessManuscript(
+  post: Pick<LiteraryPost, 'authorId' | 'status'>,
+  viewer: { uid?: string | null; role?: string | null } | null
+): boolean {
+  if (post.status === 'published') return true;
+  if (!viewer || !viewer.uid) return false;
+  if (isAdminRole(viewer.role)) return true;
+  return post.authorId === viewer.uid;
+}
 
 /**
  * Calculates author profile statistics across published works:
@@ -136,6 +258,32 @@ export function calculateAuthorStats(
     totalLikes,
     totalFollowers: Math.max(0, Math.floor(Number(authorFollowers) || 0)),
     publishedWorksCount: publishedWorks.length
+  };
+}
+
+/**
+ * Calculates comprehensive admin overview statistics across users and manuscripts.
+ */
+export function calculateAdminOverviewStats(
+  users: UserProfile[],
+  posts: LiteraryPost[]
+): AdminOverviewStats {
+  const safeUsers = users || [];
+  const safePosts = posts || [];
+  const nonDraftSubmissions = safePosts.filter((p) => p.status !== 'draft');
+
+  return {
+    totalUsers: safeUsers.length,
+    activeUsers: safeUsers.filter((u) => (u.accountStatus || 'active') === 'active').length,
+    suspendedUsers: safeUsers.filter((u) => u.accountStatus === 'suspended').length,
+    totalSubmissions: nonDraftSubmissions.length,
+    draftCount: safePosts.filter((p) => p.status === 'draft').length,
+    pendingCount: safePosts.filter((p) => p.status === 'pending').length,
+    underReviewCount: safePosts.filter((p) => p.status === 'under_review').length,
+    acceptedCount: safePosts.filter((p) => p.status === 'accepted').length,
+    revisionRequestedCount: safePosts.filter((p) => p.status === 'revision_requested').length,
+    rejectedCount: safePosts.filter((p) => p.status === 'rejected').length,
+    publishedCount: safePosts.filter((p) => p.status === 'published').length
   };
 }
 
@@ -259,6 +407,16 @@ export function incrementPostViewCount(post: LiteraryPost): LiteraryPost {
   };
 }
 
+const VALID_STATUSES: PostStatus[] = [
+  'draft',
+  'pending',
+  'under_review',
+  'accepted',
+  'revision_requested',
+  'rejected',
+  'published'
+];
+
 /**
  * Sanitizes and truncates post payload to strictly match firebase-blueprint.json & firestore.rules.
  */
@@ -267,6 +425,8 @@ export function sanitizePostPayload(
 ): Omit<LiteraryPost, 'id'> {
   const cleanId = (val: string) => val.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 128) || 'user_1';
   const now = new Date().toISOString();
+  const status: PostStatus = VALID_STATUSES.includes(raw.status) ? raw.status : 'pending';
+
   return {
     authorId: cleanId(raw.authorId),
     authorName: (raw.authorName || 'Anonymous Author').trim().slice(0, 100),
@@ -275,18 +435,52 @@ export function sanitizePostPayload(
     authorVerified: Boolean(raw.authorVerified),
     language: ['en', 'ar', 'ml'].includes(raw.language) ? raw.language : 'en',
     section: ['fiction', 'poetry', 'non-fiction'].includes(raw.section) ? raw.section : 'fiction',
+    ...(raw.categoryId ? { categoryId: cleanId(raw.categoryId) } : {}),
     title: (raw.title || 'Untitled').trim().slice(0, 200),
     subtitle: (raw.subtitle || '').trim().slice(0, 300),
     content: (raw.content || '').trim().slice(0, 50000),
     coverUrl: (raw.coverUrl || '').slice(0, 300000),
     aiScore: Math.max(0, Math.min(100, Math.round(Number(raw.aiScore) || 0))),
     aiVerdict: (raw.aiVerdict || 'Analyzed by Safwa Editorial AI Guard').slice(0, 500),
-    status: ['pending', 'published', 'rejected'].includes(raw.status) ? raw.status : 'pending',
+    status,
+    ...(typeof raw.editorialNotes === 'string'
+      ? { editorialNotes: raw.editorialNotes.trim().slice(0, 1000) }
+      : {}),
     viewsCount: Math.max(0, Math.floor(Number(raw.viewsCount) || 0)),
     likesCount: Math.max(0, Math.floor(Number(raw.likesCount) || 0)),
     commentsCount: Math.max(0, Math.floor(Number(raw.commentsCount) || 0)),
+    ...(raw.publishedAt ? { publishedAt: raw.publishedAt.slice(0, 64) } : {}),
     createdAt: (raw.createdAt || now).slice(0, 64),
     updatedAt: (raw.updatedAt || now).slice(0, 64)
+  };
+}
+
+/**
+ * Strict Firestore-compatible post payload containing only the 19 core blueprint keys
+ * required by firestore.rules.
+ */
+export function toFirestorePostDoc(raw: Omit<LiteraryPost, 'id'>) {
+  const sanitized = sanitizePostPayload(raw);
+  return {
+    authorId: sanitized.authorId,
+    authorName: sanitized.authorName,
+    authorUsername: sanitized.authorUsername,
+    authorPhoto: sanitized.authorPhoto,
+    authorVerified: sanitized.authorVerified,
+    language: sanitized.language,
+    section: sanitized.section,
+    title: sanitized.title,
+    subtitle: sanitized.subtitle,
+    content: sanitized.content,
+    coverUrl: sanitized.coverUrl,
+    aiScore: sanitized.aiScore,
+    aiVerdict: sanitized.aiVerdict,
+    status: sanitized.status,
+    viewsCount: sanitized.viewsCount,
+    likesCount: sanitized.likesCount,
+    commentsCount: sanitized.commentsCount,
+    createdAt: sanitized.createdAt,
+    updatedAt: sanitized.updatedAt
   };
 }
 
@@ -298,18 +492,54 @@ export function sanitizeUserProfilePayload(raw: UserProfile): UserProfile {
   const cleanUsername =
     raw.username.replace(/[^a-zA-Z0-9_\-.]/g, '').slice(0, 50) || `writer_${cleanUid.slice(0, 6)}`;
   const now = new Date().toISOString();
+  const validRoles: AccountRole[] = ['USER', 'ADMIN', 'reader', 'author', 'admin'];
   return {
     uid: cleanUid,
     name: (raw.name || 'Literary Contributor').trim().slice(0, 100),
     username: cleanUsername.length >= 2 ? cleanUsername : `${cleanUsername}_sw`,
+    ...(raw.email ? { email: raw.email.trim().toLowerCase().slice(0, 120) } : {}),
+    ...(raw.preferredLanguage && ['en', 'ar', 'ml'].includes(raw.preferredLanguage)
+      ? { preferredLanguage: raw.preferredLanguage }
+      : {}),
     bio: (raw.bio || '').trim().slice(0, 500),
     photoUrl: (raw.photoUrl || '').slice(0, 200000),
     isVerified: Boolean(raw.isVerified),
-    role: ['reader', 'author', 'admin'].includes(raw.role) ? raw.role : 'author',
+    role: validRoles.includes(raw.role) ? raw.role : 'USER',
+    ...(raw.accountStatus && ['active', 'suspended'].includes(raw.accountStatus)
+      ? { accountStatus: raw.accountStatus }
+      : {}),
     visibility: 'public',
     followersCount: Math.max(0, Math.floor(Number(raw.followersCount) || 0)),
     followingCount: Math.max(0, Math.floor(Number(raw.followingCount) || 0)),
+    ...(typeof raw.emailNotifications === 'boolean'
+      ? { emailNotifications: raw.emailNotifications }
+      : {}),
+    ...(typeof raw.editorialAlerts === 'boolean'
+      ? { editorialAlerts: raw.editorialAlerts }
+      : {}),
     createdAt: (raw.createdAt || now).slice(0, 64),
     updatedAt: (raw.updatedAt || now).slice(0, 64)
+  };
+}
+
+/**
+ * Strict Firestore-compatible public user profile document (zero PII).
+ */
+export function toFirestoreUserDoc(raw: UserProfile) {
+  const s = sanitizeUserProfilePayload(raw);
+  const firestoreRole = isAdminRole(s.role) ? 'admin' : s.role === 'reader' ? 'reader' : 'author';
+  return {
+    uid: s.uid,
+    name: s.name,
+    username: s.username,
+    bio: s.bio,
+    photoUrl: s.photoUrl,
+    isVerified: s.isVerified,
+    role: firestoreRole,
+    visibility: 'public' as const,
+    followersCount: s.followersCount,
+    followingCount: s.followingCount,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt
   };
 }

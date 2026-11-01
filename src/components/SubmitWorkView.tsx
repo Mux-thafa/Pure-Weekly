@@ -7,11 +7,14 @@ import {
   FileText,
   Image as ImageIcon,
   User as UserIcon,
-  Send
+  Send,
+  Save,
+  FolderOpen
 } from 'lucide-react';
 import {
   analyzeManuscriptHeuristics,
   type AiCheckResult,
+  type CategoryItem,
   type LanguageCode,
   type LiteraryPost,
   type LiterarySection,
@@ -23,7 +26,13 @@ interface SubmitWorkViewProps {
   currentUser: UserProfile;
   initialLanguage: LanguageCode;
   initialSection: LiterarySection;
-  onSubmitWork: (newPost: Omit<LiteraryPost, 'id'>) => Promise<void>;
+  categories?: CategoryItem[];
+  editingDraft?: LiteraryPost | null;
+  onClearEditingDraft?: () => void;
+  onSubmitWork: (
+    newPost: Omit<LiteraryPost, 'id'>,
+    existingId?: string
+  ) => Promise<void>;
   onNavigateDashboard: () => void;
 }
 
@@ -31,35 +40,65 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
   currentUser,
   initialLanguage,
   initialSection,
+  categories = [],
+  editingDraft = null,
+  onClearEditingDraft,
   onSubmitWork,
   onNavigateDashboard
 }) => {
-  const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
-  const [section, setSection] = useState<LiterarySection>(initialSection);
-  const [title, setTitle] = useState('');
-  const [subtitle, setSubtitle] = useState('');
-  const [authorName, setAuthorName] = useState(currentUser.name || '');
-  const [authorPhoto, setAuthorPhoto] = useState(currentUser.photoUrl || '');
+  const [language, setLanguage] = useState<LanguageCode>(
+    editingDraft?.language || initialLanguage
+  );
+  const [section, setSection] = useState<LiterarySection>(
+    editingDraft?.section || initialSection
+  );
+  const [categoryId, setCategoryId] = useState<string>(editingDraft?.categoryId || '');
+  const [title, setTitle] = useState(editingDraft?.title || '');
+  const [subtitle, setSubtitle] = useState(editingDraft?.subtitle || '');
+  const [authorName, setAuthorName] = useState(
+    editingDraft?.authorName || currentUser.name || ''
+  );
+  const [authorPhoto, setAuthorPhoto] = useState(
+    editingDraft?.authorPhoto || currentUser.photoUrl || ''
+  );
   const [authorPhotoUrlInput, setAuthorPhotoUrlInput] = useState('');
-  const [coverUrl, setCoverUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState(editingDraft?.coverUrl || '');
   const [coverUrlInput, setCoverUrlInput] = useState('');
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(editingDraft?.content || '');
 
   const [aiResult, setAiResult] = useState<AiCheckResult | null>(null);
   const [isCheckingAi, setIsCheckingAi] = useState(false);
   const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [isDraggingAuthor, setIsDraggingAuthor] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [submittedSuccess, setSubmittedSuccess] = useState(false);
+  const [submittedSuccess, setSubmittedSuccess] = useState<'pending' | 'draft' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setLanguage(initialLanguage);
-  }, [initialLanguage]);
+    if (!editingDraft) {
+      setLanguage(initialLanguage);
+    }
+  }, [initialLanguage, editingDraft]);
 
   useEffect(() => {
-    setSection(initialSection);
-  }, [initialSection]);
+    if (!editingDraft) {
+      setSection(initialSection);
+    }
+  }, [initialSection, editingDraft]);
+
+  useEffect(() => {
+    if (editingDraft) {
+      setLanguage(editingDraft.language);
+      setSection(editingDraft.section);
+      setCategoryId(editingDraft.categoryId || '');
+      setTitle(editingDraft.title);
+      setSubtitle(editingDraft.subtitle || '');
+      setAuthorName(editingDraft.authorName);
+      setAuthorPhoto(editingDraft.authorPhoto);
+      setCoverUrl(editingDraft.coverUrl);
+      setContent(editingDraft.content);
+    }
+  }, [editingDraft]);
 
   useEffect(() => {
     if (currentUser.name && !authorName) setAuthorName(currentUser.name);
@@ -67,6 +106,13 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
   }, [currentUser, authorName, authorPhoto]);
 
   const t = UI_TRANSLATIONS[language] || UI_TRANSLATIONS.en;
+
+  const matchingCategories = categories.filter(
+    (c) =>
+      c.isActive &&
+      (c.language === 'all' || c.language === language) &&
+      c.section === section
+  );
 
   const readFileAsDataUrl = (file: File, onResult: (dataUrl: string) => void) => {
     if (!file.type.startsWith('image/')) {
@@ -144,8 +190,7 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveOrSubmit = async (targetStatus: 'pending' | 'draft') => {
     setErrorMessage('');
 
     if (!title.trim()) {
@@ -156,14 +201,18 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
       setErrorMessage('Please enter the author name.');
       return;
     }
-    if (!content.trim()) {
-      setErrorMessage('Please enter or paste your manuscript text.');
+    if (targetStatus === 'pending' && !content.trim()) {
+      setErrorMessage('Please enter or paste your manuscript text before submitting.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const checkedAi = aiResult || (await runAiAuthenticityCheck());
+      const checkedAi =
+        content.trim().length > 0
+          ? aiResult || (await runAiAuthenticityCheck())
+          : { aiScore: 0, aiVerdict: 'Draft saved prior to AI scan.', signals: [] };
+
       const finalCover =
         coverUrl.trim() ||
         coverUrlInput.trim() ||
@@ -182,29 +231,34 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
         makeAvatarSvg(authorName.trim().slice(0, 2), '#9A3412', '#FBF9F5');
 
       const now = new Date().toISOString();
-      await onSubmitWork({
-        authorId: currentUser.uid,
-        authorName: authorName.trim(),
-        authorUsername: currentUser.username || 'contributor',
-        authorPhoto: finalAuthorPhoto,
-        authorVerified: currentUser.isVerified,
-        language,
-        section,
-        title: title.trim(),
-        subtitle: subtitle.trim(),
-        content: content.trim(),
-        coverUrl: finalCover,
-        aiScore: checkedAi.aiScore,
-        aiVerdict: checkedAi.aiVerdict,
-        status: 'pending',
-        viewsCount: 0,
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: now,
-        updatedAt: now
-      });
+      await onSubmitWork(
+        {
+          authorId: currentUser.uid,
+          authorName: authorName.trim(),
+          authorUsername: currentUser.username || 'contributor',
+          authorPhoto: finalAuthorPhoto,
+          authorVerified: currentUser.isVerified,
+          language,
+          section,
+          ...(categoryId ? { categoryId } : {}),
+          title: title.trim(),
+          subtitle: subtitle.trim(),
+          content: content.trim() || '(Draft in progress)',
+          coverUrl: finalCover,
+          aiScore: checkedAi.aiScore,
+          aiVerdict: checkedAi.aiVerdict,
+          status: targetStatus,
+          viewsCount: editingDraft?.viewsCount || 0,
+          likesCount: editingDraft?.likesCount || 0,
+          commentsCount: editingDraft?.commentsCount || 0,
+          createdAt: editingDraft?.createdAt || now,
+          updatedAt: now
+        },
+        editingDraft?.id
+      );
 
-      setSubmittedSuccess(true);
+      setSubmittedSuccess(targetStatus);
+      if (onClearEditingDraft) onClearEditingDraft();
       setTitle('');
       setSubtitle('');
       setContent('');
@@ -215,16 +269,33 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
     }
   };
 
+  const handleSubmitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSaveOrSubmit('pending');
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
-      <div className="mb-8 border-b border-stone-200 pb-6">
-        <p className="text-xs uppercase tracking-widest text-amber-800 font-semibold mb-2">
-          Safwa Publishers · Trilingual Manuscript Desk
-        </p>
-        <h1 className="text-3xl md:text-4xl font-display font-bold text-stone-900">
-          {t.submitPageTitle}
-        </h1>
-        <p className="text-sm text-stone-600 mt-2 max-w-2xl">{t.submitPageSub}</p>
+      <div className="mb-8 border-b border-stone-200 pb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-amber-800 font-semibold mb-2">
+            Safwa Publishers · Trilingual Manuscript Desk
+          </p>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-stone-900">
+            {editingDraft ? `Editing Manuscript: ${editingDraft.title}` : t.submitPageTitle}
+          </h1>
+          <p className="text-sm text-stone-600 mt-2 max-w-2xl">{t.submitPageSub}</p>
+        </div>
+
+        {editingDraft && onClearEditingDraft && (
+          <button
+            type="button"
+            onClick={onClearEditingDraft}
+            className="px-3.5 py-2 text-xs font-semibold text-stone-700 bg-[#F3EFE6] border border-stone-300 rounded-lg hover:bg-stone-200"
+          >
+            Start Fresh Manuscript
+          </button>
+        )}
       </div>
 
       {submittedSuccess && (
@@ -236,12 +307,14 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
             <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <h2 className="text-lg font-display font-semibold">
-                Manuscript Sent to the Official Safwa Publishers Account
+                {submittedSuccess === 'draft'
+                  ? 'Manuscript Saved as Private Draft'
+                  : 'Manuscript Sent to the Official Safwa Publishers Account'}
               </h2>
               <p className="text-xs text-emerald-200 mt-1">
-                Your work and its AI Authenticity Percentage ({aiResult?.aiScore ?? 12}% AI) have
-                been delivered to the Chief Editor queue for acceptance or rejection. You can track
-                its publication status in your Dashboard.
+                {submittedSuccess === 'draft'
+                  ? 'Your draft is stored privately in your account. You can resume editing or submit it for editorial review at any time from My Submissions.'
+                  : `Your work and its AI Authenticity Percentage (${aiResult?.aiScore ?? 12}% AI) have been delivered to the Chief Editor queue for review. Track status in your Dashboard.`}
               </p>
             </div>
           </div>
@@ -250,7 +323,7 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
             onClick={onNavigateDashboard}
             className="px-4 py-2 text-xs font-semibold bg-amber-400 text-stone-950 rounded-lg hover:bg-amber-300 transition-colors whitespace-nowrap"
           >
-            View in Dashboard & Review Queue
+            View in My Submissions & Dashboard
           </button>
         </div>
       )}
@@ -265,9 +338,9 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Step 1: Select Language & Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 rounded-2xl bg-[#F3EFE6] border border-stone-200">
+      <form onSubmit={handleSubmitForm} className="space-y-8">
+        {/* Step 1: Select Language, Section & Category */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 rounded-2xl bg-[#F3EFE6] border border-stone-200">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-2.5">
               01. Select Manuscript Language
@@ -275,8 +348,8 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  { code: 'ar', label: 'Arabic (العربية)' },
-                  { code: 'ml', label: 'Malayalam (മലയാളം)' },
+                  { code: 'ar', label: 'Arabic' },
+                  { code: 'ml', label: 'Malayalam' },
                   { code: 'en', label: 'English' }
                 ] as const
               ).map((item) => (
@@ -284,7 +357,7 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
                   key={item.code}
                   type="button"
                   onClick={() => setLanguage(item.code)}
-                  className={`py-2.5 px-3 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                  className={`py-2.5 px-2.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
                     language === item.code
                       ? 'bg-stone-900 text-white border-stone-900'
                       : 'bg-[#FBF9F5] text-stone-700 border-stone-300 hover:text-stone-900'
@@ -312,7 +385,7 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
                   key={sec.id}
                   type="button"
                   onClick={() => setSection(sec.id)}
-                  className={`py-2.5 px-3 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
+                  className={`py-2.5 px-2.5 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap ${
                     section === sec.id
                       ? 'bg-amber-800 text-white border-amber-800'
                       : 'bg-[#FBF9F5] text-stone-700 border-stone-300 hover:text-stone-900'
@@ -322,6 +395,29 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="submit-category"
+              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-700 mb-2.5"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-amber-800" />
+              <span>03. Editorial Category</span>
+            </label>
+            <select
+              id="submit-category"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full py-2.5 px-3 text-xs font-medium bg-[#FBF9F5] border border-stone-300 rounded-lg text-stone-900 focus:outline-none focus:border-amber-800"
+            >
+              <option value="">General {section} ({language.toUpperCase()})</option>
+              {matchingCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -560,7 +656,7 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
           </div>
         </div>
 
-        {/* Automatic AI Checker Report Box */}
+        {/* Automatic AI Checker Report Box + Save Draft / Submit Actions */}
         <div className="p-5 rounded-2xl bg-[#F3EFE6] border border-stone-300 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -581,8 +677,8 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-right">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-right mr-2">
               <div className="text-[11px] uppercase tracking-wider text-stone-500">
                 Estimated AI Content
               </div>
@@ -595,6 +691,16 @@ export const SubmitWorkView: React.FC<SubmitWorkViewProps> = ({
                 {aiResult ? `${aiResult.aiScore}% AI` : 'Ready'}
               </div>
             </div>
+
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => handleSaveOrSubmit('draft')}
+              className="inline-flex items-center gap-2 px-4 py-3 text-xs font-semibold text-stone-900 bg-[#FBF9F5] border border-stone-300 rounded-xl hover:bg-stone-200/70 transition-colors whitespace-nowrap"
+            >
+              <Save className="w-4 h-4 text-amber-800" />
+              <span>Save as Draft</span>
+            </button>
 
             <button
               type="submit"

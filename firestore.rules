@@ -45,11 +45,20 @@ service cloud.firestore {
         && data.bio is string && data.bio.size() <= 500
         && data.photoUrl is string && data.photoUrl.size() <= 200000
         && data.isVerified is bool
-        && data.role is string && data.role.size() <= 20 && (data.role == 'reader' || data.role == 'author' || data.role == 'admin')
+        && data.role is string && data.role.size() <= 20 && (data.role == 'reader' || data.role == 'author' || data.role == 'admin' || data.role == 'USER' || data.role == 'ADMIN')
         && data.visibility is string && data.visibility.size() <= 20 && data.visibility == 'public'
         && data.followersCount is int && data.followersCount >= 0
         && data.followingCount is int && data.followingCount >= 0
         && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidRoleRecord(data) {
+      return data.keys().hasAll(['userId', 'role', 'assignedBy', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'role', 'assignedBy', 'updatedAt'])
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.role is string && data.role.size() <= 10 && (data.role == 'USER' || data.role == 'ADMIN')
+        && data.assignedBy is string && data.assignedBy.size() >= 1 && data.assignedBy.size() <= 128
         && data.updatedAt is string && data.updatedAt.size() <= 64;
     }
 
@@ -69,10 +78,48 @@ service cloud.firestore {
         && data.coverUrl is string && data.coverUrl.size() <= 300000
         && data.aiScore is int && data.aiScore >= 0 && data.aiScore <= 100
         && data.aiVerdict is string && data.aiVerdict.size() <= 500
-        && data.status is string && data.status.size() <= 20 && (data.status == 'pending' || data.status == 'published' || data.status == 'rejected')
+        && data.status is string && data.status.size() <= 24 && (data.status == 'draft' || data.status == 'pending' || data.status == 'under_review' || data.status == 'accepted' || data.status == 'revision_requested' || data.status == 'rejected' || data.status == 'published')
         && data.viewsCount is int && data.viewsCount >= 0
         && data.likesCount is int && data.likesCount >= 0
         && data.commentsCount is int && data.commentsCount >= 0
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidPublicationRecord(data) {
+      return data.keys().hasAll(['manuscriptId', 'authorId', 'authorName', 'language', 'section', 'title', 'publishedBy', 'publishedAt'])
+        && data.keys().hasOnly(['manuscriptId', 'authorId', 'authorName', 'language', 'section', 'title', 'publishedBy', 'publishedAt'])
+        && data.manuscriptId is string && data.manuscriptId.size() >= 1 && data.manuscriptId.size() <= 128 && data.manuscriptId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 && data.authorId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100
+        && data.language is string && data.language.size() == 2 && (data.language == 'en' || data.language == 'ar' || data.language == 'ml')
+        && data.section is string && data.section.size() <= 20 && (data.section == 'fiction' || data.section == 'poetry' || data.section == 'non-fiction')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.publishedBy is string && data.publishedBy.size() >= 1 && data.publishedBy.size() <= 100
+        && data.publishedAt is string && data.publishedAt.size() <= 64;
+    }
+
+    function isValidCategoryItem(data) {
+      return data.keys().hasAll(['name', 'slug', 'language', 'section', 'description', 'isActive', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'slug', 'language', 'section', 'description', 'isActive', 'createdAt', 'updatedAt'])
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120
+        && data.language is string && data.language.size() <= 5 && (data.language == 'en' || data.language == 'ar' || data.language == 'ml' || data.language == 'all')
+        && data.section is string && data.section.size() <= 20 && (data.section == 'fiction' || data.section == 'poetry' || data.section == 'non-fiction')
+        && data.description is string && data.description.size() <= 300
+        && data.isActive is bool
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidAnnouncementItem(data) {
+      return data.keys().hasAll(['title', 'content', 'language', 'isActive', 'authorName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'content', 'language', 'isActive', 'authorName', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 1000
+        && data.language is string && data.language.size() <= 5 && (data.language == 'en' || data.language == 'ar' || data.language == 'ml' || data.language == 'all')
+        && data.isActive is bool
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100
         && data.createdAt is string && data.createdAt.size() <= 64
         && data.updatedAt is string && data.updatedAt.size() <= 64;
     }
@@ -136,7 +183,7 @@ service cloud.firestore {
         && data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128 && data.targetUserId.matches('^[a-zA-Z0-9_\\-]+$')
         && data.actorId is string && data.actorId.size() >= 1 && data.actorId.size() <= 128 && data.actorId.matches('^[a-zA-Z0-9_\\-]+$')
         && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100
-        && data.type is string && data.type.size() <= 20 && (data.type == 'published' || data.type == 'submission' || data.type == 'verified' || data.type == 'new_account')
+        && data.type is string && data.type.size() <= 20 && (data.type == 'published' || data.type == 'submission' || data.type == 'verified' || data.type == 'new_account' || data.type == 'admin_notice' || data.type == 'status_update')
         && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
         && data.postId is string && data.postId.size() <= 128
         && data.createdAt is string && data.createdAt.size() <= 64;
@@ -154,6 +201,22 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
+    // Roles Collection (RBAC Source of Truth)
+    match /roles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (existing().userId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidRoleRecord(incoming())
+        && incoming().userId == userId
+        && (isAdmin() || (request.auth.uid == userId && incoming().role == 'USER'));
+      allow update: if isAdmin()
+        && isValidId(userId)
+        && isValidRoleRecord(incoming())
+        && incoming().userId == existing().userId;
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
     // Public User Profiles (Zero PII stored here)
     match /users/{userId} {
       allow get: if isValidId(userId) && (resource == null || existing().visibility == 'public' || (isSignedIn() && request.auth.uid == userId));
@@ -164,7 +227,7 @@ service cloud.firestore {
         && incoming().uid == request.auth.uid
         && incoming().uid == userId
         && (
-          isAdmin() || (incoming().isVerified == false && (incoming().role == 'author' || incoming().role == 'reader'))
+          isAdmin() || (incoming().isVerified == false && (incoming().role == 'author' || incoming().role == 'reader' || incoming().role == 'USER'))
         );
       allow update: if isVerifiedUser()
         && isValidId(userId)
@@ -186,7 +249,7 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(userId);
     }
 
-    // Literary Posts
+    // Literary Posts / Manuscripts
     match /posts/{postId} {
       allow get: if isValidId(postId) && (existing().status == 'published' || (isSignedIn() && (existing().authorId == request.auth.uid || isAdmin())));
       allow list: if existing().status == 'published' || (isSignedIn() && (existing().authorId == request.auth.uid || isBootstrappedAdmin()));
@@ -194,7 +257,7 @@ service cloud.firestore {
         && isValidId(postId)
         && isValidLiteraryPost(incoming())
         && incoming().authorId == request.auth.uid
-        && (isAdmin() || incoming().status == 'pending')
+        && (isAdmin() || incoming().status == 'pending' || incoming().status == 'draft')
         && exists(/databases/$(database)/documents/users/$(request.auth.uid));
       allow update: if isValidId(postId)
         && isValidLiteraryPost(incoming())
@@ -205,9 +268,9 @@ service cloud.firestore {
           || (
             isVerifiedUser()
             && request.auth.uid == existing().authorId
-            && existing().status == 'pending'
-            && incoming().status == 'pending'
-            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subtitle', 'content', 'coverUrl', 'updatedAt'])
+            && (existing().status == 'draft' || existing().status == 'pending' || existing().status == 'revision_requested')
+            && (incoming().status == 'draft' || incoming().status == 'pending')
+            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subtitle', 'content', 'coverUrl', 'status', 'updatedAt'])
           )
           || (
             existing().status == 'published'
@@ -235,6 +298,30 @@ service cloud.firestore {
           && (existing().authorId == request.auth.uid || isAdmin())
           && exists(/databases/$(database)/documents/posts/$(postId));
       }
+    }
+
+    // Publications Catalog
+    match /publications/{publicationId} {
+      allow get: if isValidId(publicationId) && existing().manuscriptId.size() >= 1;
+      allow list: if existing().manuscriptId.size() >= 1;
+      allow create, update: if isAdmin() && isValidId(publicationId) && isValidPublicationRecord(incoming());
+      allow delete: if isAdmin() && isValidId(publicationId);
+    }
+
+    // Categories
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId) && (existing().isActive == true || isAdmin());
+      allow list: if existing().isActive == true || isBootstrappedAdmin();
+      allow create, update: if isAdmin() && isValidId(categoryId) && isValidCategoryItem(incoming());
+      allow delete: if isAdmin() && isValidId(categoryId);
+    }
+
+    // Announcements
+    match /announcements/{announcementId} {
+      allow get: if isValidId(announcementId) && (existing().isActive == true || isAdmin());
+      allow list: if existing().isActive == true || isBootstrappedAdmin();
+      allow create, update: if isAdmin() && isValidId(announcementId) && isValidAnnouncementItem(incoming());
+      allow delete: if isAdmin() && isValidId(announcementId);
     }
 
     // Homepage Stories (Only from published posts)

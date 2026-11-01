@@ -2,14 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   analyzeManuscriptHeuristics,
+  calculateAdminOverviewStats,
   calculateAuthorStats,
+  canUserAccessManuscript,
   filterPublishedPosts,
+  formatSubmissionStatusLabel,
   incrementPostViewCount,
+  isAdminRole,
+  normalizeRole,
   sanitizePostPayload,
   sanitizeUserProfilePayload,
-  type AuthorStats,
-  type LiteraryPost
+  type LiteraryPost,
+  type UserProfile
 } from './editorialLogic';
+import {
+  createSignedSessionToken,
+  hashPasswordWithSalt,
+  verifyPasswordHash,
+  verifySignedSessionToken
+} from '../server/authAndDb';
 
 const samplePost: LiteraryPost = {
   id: 'post_1',
@@ -103,7 +114,7 @@ test('sanitizePostPayload and sanitizeUserProfilePayload enforce blueprint bound
     bio: 'Malayalam & English Essayist',
     photoUrl: '',
     isVerified: false,
-    role: 'author',
+    role: 'USER',
     visibility: 'public',
     followersCount: -2,
     followingCount: 3,
@@ -166,4 +177,114 @@ test('calculateAuthorStats accurately calculates total reads, likes, and followe
   assert.equal(stats.totalFollowers, 42);
   assert.equal(stats.publishedWorksCount, 2);
 });
+
+test('RBAC helpers enforce strict USER vs ADMIN normalization and private manuscript protection', () => {
+  assert.equal(isAdminRole('ADMIN'), true);
+  assert.equal(isAdminRole('admin'), true);
+  assert.equal(isAdminRole('USER'), false);
+  assert.equal(isAdminRole('author'), false);
+  assert.equal(normalizeRole('ADMIN'), 'ADMIN');
+  assert.equal(normalizeRole('USER'), 'USER');
+
+  const draftPost: LiteraryPost = {
+    ...samplePost,
+    id: 'draft_1',
+    authorId: 'author_1',
+    status: 'draft'
+  };
+
+  // Anonymous visitor cannot read draft
+  assert.equal(canUserAccessManuscript(draftPost, null), false);
+  // Another non-admin user cannot read author_1's private draft
+  assert.equal(canUserAccessManuscript(draftPost, { uid: 'author_2', role: 'USER' }), false);
+  // The owning author can read their own draft
+  assert.equal(canUserAccessManuscript(draftPost, { uid: 'author_1', role: 'USER' }), true);
+  // An administrator can review manuscripts
+  assert.equal(canUserAccessManuscript(draftPost, { uid: 'admin_1', role: 'ADMIN' }), true);
+  // Anyone can read a published post
+  assert.equal(canUserAccessManuscript(samplePost, null), true);
+  assert.equal(formatSubmissionStatusLabel('under_review'), 'Under Review');
+  assert.equal(formatSubmissionStatusLabel('revision_requested'), 'Revision Requested');
+});
+
+test('calculateAdminOverviewStats aggregates user, status, and language metrics accurately', () => {
+  const users: UserProfile[] = [
+    {
+      uid: 'u1',
+      name: 'Admin User',
+      username: 'admin',
+      bio: 'Admin',
+      photoUrl: '',
+      isVerified: true,
+      role: 'ADMIN',
+      accountStatus: 'active',
+      visibility: 'public',
+      followersCount: 10,
+      followingCount: 1,
+      createdAt: '2026-10-30T10:00:00.000Z',
+      updatedAt: '2026-10-30T10:00:00.000Z'
+    },
+    {
+      uid: 'u2',
+      name: 'Suspended Author',
+      username: 'suspended_u',
+      bio: 'Author',
+      photoUrl: '',
+      isVerified: false,
+      role: 'USER',
+      accountStatus: 'suspended',
+      visibility: 'public',
+      followersCount: 0,
+      followingCount: 0,
+      createdAt: '2026-10-30T10:00:00.000Z',
+      updatedAt: '2026-10-30T10:00:00.000Z'
+    }
+  ];
+
+  const manuscripts: LiteraryPost[] = [
+    { ...samplePost, id: 'm1', status: 'published', language: 'ar' },
+    { ...samplePost, id: 'm2', status: 'pending', language: 'ml' },
+    { ...samplePost, id: 'm3', status: 'under_review', language: 'en' },
+    { ...samplePost, id: 'm4', status: 'accepted', language: 'ar' },
+    { ...samplePost, id: 'm5', status: 'rejected', language: 'en' },
+    { ...samplePost, id: 'm6', status: 'draft', language: 'ml' }
+  ];
+
+  const overview = calculateAdminOverviewStats(users, manuscripts);
+  assert.equal(overview.totalUsers, 2);
+  assert.equal(overview.activeUsers, 1);
+  assert.equal(overview.suspendedUsers, 1);
+  assert.equal(overview.totalSubmissions, 5); // Excludes private unsubmitted drafts
+  assert.equal(overview.publishedCount, 1);
+  assert.equal(overview.pendingCount, 1);
+  assert.equal(overview.underReviewCount, 1);
+  assert.equal(overview.acceptedCount, 1);
+  assert.equal(overview.rejectedCount, 1);
+  assert.equal(overview.draftCount, 1);
+});
+
+test('scrypt password hashing and HMAC session tokens verify securely and reject tampering', () => {
+  const { hash, salt } = hashPasswordWithSalt('MyStrongPassword!2026');
+  assert.equal(verifyPasswordHash('MyStrongPassword!2026', salt, hash), true);
+  assert.equal(verifyPasswordHash('WrongPassword!2026', salt, hash), false);
+
+  const { token } = createSignedSessionToken({
+    uid: 'user_123',
+    role: 'USER',
+    email: 'author@example.com'
+  });
+  const verified = verifySignedSessionToken(token);
+  assert.ok(verified);
+  assert.equal(verified.uid, 'user_123');
+  assert.equal(verified.role, 'USER');
+
+  // Tamper with payload to attempt privilege escalation to ADMIN
+  const [, sig] = token.split('.');
+  const tamperedPayload = Buffer.from(
+    JSON.stringify({ uid: 'user_123', role: 'ADMIN', email: 'author@example.com', sid: 'fake', iat: 1000, exp: Math.floor(Date.now() / 1000) + 60000 })
+  ).toString('base64url');
+  const tamperedToken = `${tamperedPayload}.${sig}`;
+  assert.equal(verifySignedSessionToken(tamperedToken), null);
+});
+
 

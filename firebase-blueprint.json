@@ -11,7 +11,7 @@
         "bio": { "type": "string", "maxLength": 500 },
         "photoUrl": { "type": "string", "maxLength": 200000 },
         "isVerified": { "type": "boolean" },
-        "role": { "type": "string", "enum": ["reader", "author", "admin"] },
+        "role": { "type": "string", "enum": ["reader", "author", "admin", "USER", "ADMIN"] },
         "visibility": { "type": "string", "enum": ["public"] },
         "followersCount": { "type": "integer" },
         "followingCount": { "type": "integer" },
@@ -20,9 +20,21 @@
       },
       "required": ["uid", "name", "username", "bio", "photoUrl", "isVerified", "role", "visibility", "followersCount", "followingCount", "createdAt", "updatedAt"]
     },
+    "RoleRecord": {
+      "title": "RoleRecord",
+      "description": "Role-based access control assignment record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["USER", "ADMIN"] },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "role", "assignedBy", "updatedAt"]
+    },
     "LiteraryPost": {
       "title": "LiteraryPost",
-      "description": "Submitted or published literary work in Arabic, Malayalam, or English.",
+      "description": "Draft, submitted, reviewed, or published literary manuscript in Arabic, Malayalam, or English.",
       "type": "object",
       "properties": {
         "authorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
@@ -38,7 +50,7 @@
         "coverUrl": { "type": "string", "maxLength": 300000 },
         "aiScore": { "type": "integer" },
         "aiVerdict": { "type": "string", "maxLength": 500 },
-        "status": { "type": "string", "enum": ["pending", "published", "rejected"] },
+        "status": { "type": "string", "enum": ["draft", "pending", "under_review", "accepted", "revision_requested", "rejected", "published"] },
         "viewsCount": { "type": "integer" },
         "likesCount": { "type": "integer" },
         "commentsCount": { "type": "integer" },
@@ -46,6 +58,53 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["authorId", "authorName", "authorUsername", "authorPhoto", "authorVerified", "language", "section", "title", "subtitle", "content", "coverUrl", "aiScore", "aiVerdict", "status", "viewsCount", "likesCount", "commentsCount", "createdAt", "updatedAt"]
+    },
+    "PublicationRecord": {
+      "title": "PublicationRecord",
+      "description": "Official publication record for an accepted and published manuscript.",
+      "type": "object",
+      "properties": {
+        "manuscriptId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "language": { "type": "string", "enum": ["en", "ar", "ml"] },
+        "section": { "type": "string", "enum": ["fiction", "poetry", "non-fiction"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "publishedBy": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["manuscriptId", "authorId", "authorName", "language", "section", "title", "publishedBy", "publishedAt"]
+    },
+    "CategoryItem": {
+      "title": "CategoryItem",
+      "description": "Language and literary section category managed by administrators.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "slug": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "language": { "type": "string", "enum": ["en", "ar", "ml", "all"] },
+        "section": { "type": "string", "enum": ["fiction", "poetry", "non-fiction"] },
+        "description": { "type": "string", "maxLength": 300 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "slug", "language", "section", "description", "isActive", "createdAt", "updatedAt"]
+    },
+    "AnnouncementItem": {
+      "title": "AnnouncementItem",
+      "description": "Website editorial announcement managed by administrators.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "language": { "type": "string", "enum": ["en", "ar", "ml", "all"] },
+        "isActive": { "type": "boolean" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "language", "isActive", "authorName", "createdAt", "updatedAt"]
     },
     "PostComment": {
       "title": "PostComment",
@@ -119,7 +178,7 @@
         "targetUserId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "actorId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "actorName": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "type": { "type": "string", "enum": ["published", "submission", "verified", "new_account"] },
+        "type": { "type": "string", "enum": ["published", "submission", "verified", "new_account", "admin_notice", "status_update"] },
         "title": { "type": "string", "minLength": 1, "maxLength": 200 },
         "postId": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string", "format": "date-time" }
@@ -132,9 +191,25 @@
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "Public author and reader profiles"
     },
+    "/roles/{userId}": {
+      "schema": { "$ref": "#/entities/RoleRecord" },
+      "description": "Role-based access control records (USER vs ADMIN)"
+    },
     "/posts/{postId}": {
       "schema": { "$ref": "#/entities/LiteraryPost" },
-      "description": "Literary submissions and published works"
+      "description": "Literary drafts, submissions, and published works"
+    },
+    "/publications/{publicationId}": {
+      "schema": { "$ref": "#/entities/PublicationRecord" },
+      "description": "Official catalog publications"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/CategoryItem" },
+      "description": "Trilingual literary categories"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/AnnouncementItem" },
+      "description": "Website editorial announcements"
     },
     "/posts/{postId}/comments/{commentId}": {
       "schema": { "$ref": "#/entities/PostComment" },
